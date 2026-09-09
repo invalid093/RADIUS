@@ -80,10 +80,24 @@ The last two are caught by exactly one test each, which is the intended design: 
 are the dedicated anchors for those findings.  If either of those tests is ever
 weakened, the corresponding audit finding loses its only guard.
 
-Run (standard library only — pytest is not a project dependency and is not installed):
+HOW TO RUN — and one command that must NOT be used
+--------------------------------------------------
+Standard library only; pytest is not a project dependency and is not installed.
 
-    python tests/test_frames.py
+From the repository root::
+
     python -m unittest discover -s tests -t tests
+
+**Do not use ``python tests/test_frames.py``.**  Running the file as a script puts
+``tests/`` on ``sys.path`` rather than the repository root, so ``import radius`` fails,
+every test skips, and unittest prints ``OK (skipped=13)``.  That reads as success while
+having verified nothing — the precise failure mode this file exists to prevent.  The
+``__main__`` block below is retained only for use with the repository root already on
+``PYTHONPATH``.
+
+(``discover -s tests -t .`` is unavailable: Python 3.11+ requires the start directory to
+be importable, which would mean adding ``tests/__init__.py``.  That has not been done,
+because the command above works without it.)
 """
 
 import math
