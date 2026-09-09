@@ -158,7 +158,21 @@ continue researching rather than implementing it.
 
 ## Public repository principle
 
-This repository is a public research record. Never commit:
+**`docs/methodology/PUBLICATION_POLICY.md` is authoritative for every publication decision.** Read it
+before any push, then run the audit in `infrastructure/publication_checklist.md` — over the working
+tree **and** the git history, which are separate risks. If any item is uncertain: **do not push;
+flag it for researcher review.**
+
+The repository is a *curated, auditable, reproducible public research record* — not a mirror of the
+local workspace. Governing rule: **publish the research record, not the entire laboratory.** An
+artifact earns its place by improving reproducibility, scientific interpretation, or understanding;
+existing is not a qualification. Raw simulation output, Monte Carlo ensembles, per-run directories,
+debug plots and logs stay local — a result is reproducible from code + configuration + seed + commit,
+and that is a stronger guarantee than a snapshot of the output.
+
+`git add .` is not a publication mechanism. Stage by path, and read `git diff --cached`.
+
+Never commit:
 
 - credentials of any kind — `.env`, `*.pem`, `*.key`, tokens, SSH material, cloud credentials;
 - personal email addresses, phone numbers, addresses, or usernames revealing private accounts,
@@ -166,9 +180,14 @@ This repository is a public research record. Never commit:
 - machine-specific absolute paths. Documentation uses repository-relative paths;
 - bulk generated output merely because it exists — publish configuration, seeds, manifests and the
   reproduction procedure instead;
-- copyrighted papers or datasets.
+- copyrighted papers or datasets;
+- AI interaction records — conversation transcripts, prompts, internal reasoning, agent or tool logs,
+  or unreviewed AI-generated notes. The repository contains human-reviewed engineering artifacts. The
+  research log records *decisions and their rationale*, not a diary of interactions or commands.
 
-Do not add a licence unless the researcher explicitly instructs it.
+Do not add a licence unless the researcher explicitly instructs it. Before any release presented as
+final, the licence question must be settled explicitly, along with every third-party dependency's
+licence and its required notices.
 
 Do not use a "scratch code" exemption to withhold a methodological detail that a conclusion depends
 on. If a result rests on an implementation choice, that choice is documented.

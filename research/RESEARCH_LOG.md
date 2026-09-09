@@ -85,4 +85,41 @@ effectively one-way once copies exist.
 
 **IMPACT.** Repository is readable and auditable but not reusable.
 
-**NEXT STEP.** Revisit only on explicit researcher instruction.
+**NEXT STEP.** Revisit only on explicit researcher instruction. Before any release presented as
+final, the licence must be settled explicitly along with every third-party dependency's licence and
+required notices.
+
+---
+
+## 2026-09-09 · RL-0005 — Deny-by-default publication architecture adopted before any data exists
+
+**DECISION.** A three-layer publication architecture: a policy classifying every artifact into five
+classes (`docs/methodology/PUBLICATION_POLICY.md`); a `.gitignore` rewritten to deny each class of
+generated artifact wholesale and re-include named curated exceptions; and a pre-push audit procedure
+covering the working tree and the git history separately
+(`infrastructure/publication_checklist.md`). Provenance requirements specified in
+`docs/PROVENANCE.md`. GitHub secret scanning and push protection enabled.
+
+**RATIONALE.** Three pressures make the case-by-case default wrong. Monte Carlo output is enormous
+and individually worthless — the ensemble statistic is the result, not any trajectory in it.
+Generated artifacts are self-justifying: a file that exists feels like it should be kept. And Git's
+costs are permanent and delayed — a large blob or a leaked secret persists in every clone and is not
+fixed by deleting the file later. The policy therefore had to be written before the first large run,
+while none of the artifacts exist and none of them are anyone's work yet.
+
+A blocklist `.gitignore` was rejected: it fails silently on the artifact class nobody anticipated,
+which is precisely the class that causes the accident. Deny-by-default fails toward not publishing.
+
+**EVIDENCE.** `docs/decisions/ADR-0008-publication-architecture.md`. The `.gitignore` was tested
+against dummy artifacts (`CALCULATION`, 2026-09-09): curated result files, figures and figure scripts
+are trackable; bulk `.npz`, per-run directories, scratch, logs, `.env`, stray notebooks and agent
+directories are all denied. One inconsistency was found and fixed in that test — notebooks under
+`notebooks/` were trackable despite the policy stating they require an explicit force-add.
+
+**IMPACT.** Publishing an artifact now takes deliberate effort, which is the mechanism rather than a
+side effect. It also makes the determinism guarantee load-bearing: because ensembles are not
+published, V-NUM-03 (bitwise determinism from config + seed) is what makes their absence legitimate.
+`infrastructure/` was created ahead of the ADR-0001 schedule because the checklist is content with a
+documented purpose — an instance of that principle, not an exception to it.
+
+**NEXT STEP.** Resume the mathematical specification (RS-002 onward) under these rules.

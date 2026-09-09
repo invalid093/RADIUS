@@ -1,67 +1,159 @@
 # ---- RADIUS .gitignore ----
-# Principle: Git stores source, configuration, documentation, specifications,
-# manifests and small reference data. It does NOT store bulk trajectory output,
-# Monte Carlo ensembles, caches, or regenerable intermediates. A run is
-# reproduced from its configuration + seed, not restored from a tracked blob.
+#
+# STRATEGY: deny by default for every class of generated artifact, then re-include
+# named, curated exceptions. The default answer for anything a run produces is "not
+# published"; publishing is an explicit act.
+#
+# This file prevents accidents. It is NOT review, and a file it fails to match is
+# NOT thereby approved for publication. See docs/methodology/PUBLICATION_POLICY.md
+# and run infrastructure/publication_checklist.md before every push.
+#
+# `git add .` is not a publication mechanism. Stage by path.
 
-# --- Bulk / regenerable simulation output ---
+# =====================================================================
+# 1. Generated experiment output  (policy 2.3 PRIVATE/LOCAL)
+# =====================================================================
+# results/ is curated, so it is denied wholesale and re-opened for the
+# specific artifact types that carry metadata and are small enough to publish.
 results/**
-!results/.gitkeep
+!results/*/
 !results/**/README.md
 !results/**/manifest.json
-!results/**/manifest.yaml
-!results/**/metrics.json
+!results/**/*.csv
+!results/**/figures/
+!results/**/figures/*.png
+!results/**/figures/*.svg
+!results/**/figures/*.py
+
+# Per-run directories and bulk ensembles are never published.
+# These come after the re-inclusions above and therefore override them.
+**/run_[0-9]*/
+**/runs/
+**/raw/
+**/raw_data/
+**/monte_carlo/
+**/mc_output/
+**/ensemble/
+**/output/
+**/outputs/
+**/generated/
+**/unreviewed/
+
+# Bulk numeric formats: regenerable from config + seed (docs/PROVENANCE.md section 4).
 *.npz
 *.npy
 *.parquet
 *.h5
 *.hdf5
 *.pkl
-# Exception: small analytically-derived reference trajectories used as regression
-# fixtures are evidence, not bulk data. Add them individually with a justification.
+*.mat
+*.feather
+# Exception: small analytical reference solutions kept as regression fixtures.
+# Each is added deliberately, with a README documenting units, frame and origin.
 !validation/reference/**
 
-# --- Python ---
+# =====================================================================
+# 2. Scratch, logs, caches, debug  (policy 2.3 / 2.4)
+# =====================================================================
+scratch/
+tmp/
+temp/
+cache/
+.cache/
+debug/
+logs/
+*.log
+*.out
+*.err
+profile_*.txt
+*.prof
+# The research log is a curated decision record, not a runtime log.
+!research/research_log/*.md
+
+# =====================================================================
+# 3. Secrets and credentials  (policy 2.4 NEVER PUBLISH)
+# =====================================================================
+# Publish config.example.yaml; never a config carrying a credential.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.cer
+secrets.*
+credentials.*
+*credentials*.json
+id_rsa*
+id_ed25519*
+*.token
+.netrc
+.npmrc
+.pypirc
+.aws/
+.ssh/
+
+# =====================================================================
+# 4. Local machine and environment  (policy 2.4 NEVER PUBLISH)
+# =====================================================================
+.venv/
+venv/
+env/
+.python-version
+.direnv/
+*.local.yaml
+*.local.yml
+*.local.json
+local_config/
+machine_specific/
+
+# =====================================================================
+# 5. AI interaction records  (policy section 7 - NEVER PUBLISH)
+# =====================================================================
+agent_transcripts/
+ai_conversations/
+transcripts/
+prompts/
+.claude/
+*.transcript.md
+personal_notes/
+
+# =====================================================================
+# 6. Notebooks  (policy 2.2 - PUBLIC ONLY AFTER REVIEW)
+# =====================================================================
+# Denied unconditionally, including under notebooks/ and examples/. A notebook
+# enters the repository only by `git add -f`, after it is cleaned of exploratory
+# cells, local paths and stored outputs, and reviewed as scientifically useful.
+# The force-add IS the review step: there is deliberately no path that publishes a
+# notebook by accident.
+*.ipynb
+.ipynb_checkpoints/
+
+# =====================================================================
+# 7. Python build and tooling artifacts
+# =====================================================================
 __pycache__/
 *.py[cod]
 *.egg-info/
 .eggs/
 build/
 dist/
-.venv/
-venv/
-env/
-.python-version
-.ipynb_checkpoints/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 .coverage
+coverage.xml
 htmlcov/
 
-# --- OS / editor ---
+# =====================================================================
+# 8. OS and editor
+# =====================================================================
 .DS_Store
 Thumbs.db
 desktop.ini
 .vscode/
 .idea/
 *.swp
-
-# --- Secrets: never tracked, in any form ---
-.env
-.env.*
-*.key
-*.pem
-*.p12
-*.pfx
-secrets.*
-credentials.*
-id_rsa*
-id_ed25519*
-*.token
-
-# --- Scratch ---
-scratch/
-tmp/
-*.log
-!research/research_log/*.md
+*~

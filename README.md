@@ -110,19 +110,39 @@ RADIUS/
 ├── README.md            this file
 ├── CLAUDE.md            operating rules for the project
 ├── docs/
-│   ├── research/        mathematical specification (state, frames, attitude, EOM, numerics, ...)
+│   ├── PROVENANCE.md    the chain every published number must be traceable along
+│   ├── assumptions.md   assumptions register; code cites an ID, never an inline comment alone
+│   ├── research/        mathematical specification (frames, attitude, state, EOM, numerics, ...)
 │   ├── architecture/    software architecture; conceptual AURA interface
-│   ├── methodology/     notation, units, sign conventions; V&V strategy
-│   ├── decisions/       ADRs — decisions with rationale, alternatives, and revisit criteria
-│   └── assumptions.md   assumptions register; code cites an ID, never an inline comment alone
+│   ├── methodology/     notation and conventions; V&V strategy; publication policy
+│   └── decisions/       ADRs — decisions with rationale, alternatives, and revisit criteria
+├── infrastructure/
+│   └── publication_checklist.md   pre-push audit
 └── research/
     ├── SOURCES.md       reference record: what each source is used for
     └── RESEARCH_LOG.md  dated decision log
 ```
 
-Implementation directories (`radius/`, `experiments/`, `validation/`, `tests/`, `infrastructure/`,
-`results/`, `handoffs/`) are **not created yet**. They arrive with the phase that fills them, so that
-the tree describes what exists rather than what is intended. See `docs/decisions/ADR-0001`.
+Implementation directories (`radius/`, `experiments/`, `validation/`, `tests/`, `results/`,
+`handoffs/`) are **not created yet**. They arrive with the phase that fills them, so that the tree
+describes what exists rather than what is intended. See `docs/decisions/ADR-0001`.
+
+## What is published here, and what is not
+
+This repository is a **curated research record**, not a mirror of the working environment.
+
+Published: source code, specifications, reports, ADRs, experiment definitions, configurations, seeds,
+curated result tables, and the figures behind published claims. Not published: raw and intermediate
+simulation output, Monte Carlo ensembles, per-run directories, debug plots, logs, caches, notebooks
+that have not been cleaned and reviewed, and AI interaction records.
+
+The reason is not tidiness. A result here is reproducible from **code + configuration + seed +
+commit**, so publishing those is a stronger guarantee than publishing a snapshot of the output — and
+burying the evidence under thousands of undocumented files makes a claim harder to check, not easier.
+
+Policy: [`docs/methodology/PUBLICATION_POLICY.md`](docs/methodology/PUBLICATION_POLICY.md) ·
+audit: [`infrastructure/publication_checklist.md`](infrastructure/publication_checklist.md) ·
+rationale: [ADR-0008](docs/decisions/ADR-0008-publication-architecture.md).
 
 ## Implementation order
 
@@ -139,6 +159,22 @@ mathematical formulation, assumptions and verification strategy are documented.
 Nothing to run yet. When there is, dependencies will be kept minimal (Python, `numpy`, `PyYAML`
 unless a further dependency is justified), every stochastic component will take an explicit seed, and
 every result will trace to configuration + seed + commit.
+
+Reproducibility is claimed precisely, not loosely: **bitwise-identical output on the same platform
+and library versions** given the same commit, configuration and seed; **agreement within a stated
+tolerance** across platforms. The stronger cross-platform claim would require pinned compiler flags
+and a controlled BLAS, which RADIUS does not do. See [`docs/PROVENANCE.md`](docs/PROVENANCE.md) §5.
+
+## Citation
+
+There is no result here to cite yet. Until there is, refer to the repository itself:
+
+> RADIUS — Rocket Dynamics & Integrated Uncertainty Simulation.
+> `https://github.com/invalid093/RADIUS`, commit `<hash>`, accessed `<date>`.
+
+Cite a specific commit, not the branch: the repository is under active development and `main` will
+not say the same thing next week. A `CITATION.cff` will be added when there is a result worth
+citing and the author has chosen how to be named.
 
 ## Licence
 
