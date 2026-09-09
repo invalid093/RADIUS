@@ -1,6 +1,8 @@
 # RADIUS — Verification and Validation Strategy
 
-**Status:** Strategy, designed before implementation. Nothing has been verified or validated.
+**Status:** Strategy, written before implementation. The frame and attitude conventions are now
+**verified** against hand-derived anchors (section 2). Nothing is **validated**, and no dynamics,
+integrator, atmosphere or aerodynamic code exists to verify.
 **Sources:** SRC-011 (Oberkampf & Roy), SRC-012 (AIAA G-077-1998), SRC-013 (NASA-STD-7009)
 
 ---
@@ -31,18 +33,36 @@ correct statement is *"verified, not validated"*, and the limitation is reported
 
 ## 2. Current status
 
-`FACT`, 2026-09-09:
+`FACT`, 2026-09-09 (updated when the first tests began passing; the previous version of
+this table said "verification tests written: none", which stopped being true at Phase 2B):
 
 | | |
 |---|---|
-| Verified | **nothing** |
+| Verified | **the frame and attitude conventions only** — V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01, against hand-derived anchors. Nothing else |
 | Validated | **nothing** |
-| Verification tests written | **none** — 60+ are *specified* across RS-001…RS-008 |
+| Verification tests written | **19**, all passing, none skipped — out of 65+ *specified* across RS-001…RS-008 |
 | Independent reference data held | **none** |
 
-The last row is the important one, and it is a `LIMITATION` on the whole project: **RADIUS currently
-has no path to validation of its trajectory output**, because it has no independent benchmark to
-compare against. This is recorded in `research/SOURCES.md` as an open gap. Until it closes, RADIUS
+### Traceability — audit findings to their guarding anchors
+
+The two load-bearing corrections from the pre-implementation audit have named,
+independent anchors rather than being covered incidentally:
+
+| Finding | Assumption | Anchor | Guards |
+|---|---|---|---|
+| **F-3** | `A-NUM-05` | **V-FRM-09** | `dcm_b_from_i_quat` is scale-invariant *and* agrees with an independently derived DCM. Uses a non-unit, non-axis-aligned quaternion whose exact rational DCM is hand-derived |
+| **F-4** | — | **V-FRM-10** | `T(qa ⊗ qb) = T(qb) T(qa)`. Both sides pinned to literals; the reversed order is pinned to a *second* literal, so the wrong answer is anchored too |
+| F-2 | — | V-FRM-05 (specified, not yet written) | wind-frame composition sign |
+
+`LIMITATION` on V-FRM-09: it establishes the observable half of `A-NUM-05`
+(scale invariance) but **cannot** establish that the implementation divides rather than
+normalising — the two are the same mathematical map, agreeing to 5.6e-16 over 2000
+random inputs. Branch-freedom is a source property, verified by reading, not by testing.
+Recorded so that a passing V-FRM-09 is not read as full coverage of `A-NUM-05`.
+
+The **"independent reference data held: none"** row above is the important one, and it is a
+`LIMITATION` on the whole project: **RADIUS currently has no path to validation of its trajectory
+output**, because it has no independent benchmark to compare against. This is recorded in `research/SOURCES.md` as an open gap. Until it closes, RADIUS
 can become a thoroughly verified implementation of a model whose fidelity to reality is entirely
 unestablished — and it must say so.
 

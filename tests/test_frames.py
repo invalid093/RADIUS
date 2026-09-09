@@ -483,9 +483,14 @@ class TestVATT01AttitudeAnchors(_AnchorAssertions):
     # -- Quaternion argument handling, anchored to case 2's literal ------------------
     #
     # Both sub-cases below are anchored to the hand-derived R_z(pi/2) literal, so
-    # neither is a round trip or a self-consistency check.  They cover the subset of
-    # audit findings F-3 (A-NUM-05) and the double-cover property that a literal DCM
-    # already pins; the dedicated V-FRM-09 and V-FRM-10 anchors are a later increment.
+    # neither is a round trip or a self-consistency check.
+    #
+    # These OVERLAP with, but are not superseded by, the dedicated V-FRM-09 anchors
+    # further down.  They are retained deliberately: this pair uses an axis-aligned
+    # quaternion (yaw 90) where V-FRM-09 uses a non-axis-aligned one, so the two
+    # exercise different numerical cases of the same property.  If either is ever
+    # removed it should be this pair, not V-FRM-09 -- and only with the overlap
+    # re-checked, since these are the only sub-cases covering exact negation (k = -1).
 
     YAW90_QUAT = [SQRT2_2, 0.0, 0.0, SQRT2_2]
     YAW90_DCM = [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]]
@@ -509,6 +514,280 @@ class TestVATT01AttitudeAnchors(_AnchorAssertions):
             dcm_b_from_i_quat([-x for x in self.YAW90_QUAT]), self.YAW90_DCM,
             "V-ATT-01: negating a quaternion must not change the attitude it "
             "represents (double cover).",
+        )
+
+
+# ======================================================================================
+# V-FRM-09 — non-unit quaternion invariance / the q.q denominator
+# ======================================================================================
+#
+# TRACEABILITY
+#     audit finding F-3  ->  assumption A-NUM-05  ->  V-FRM-09  ->  dcm_b_from_i_quat
+#
+# See PRE_IMPLEMENTATION_MATHEMATICAL_AUDIT.md section 2.4 and docs/assumptions.md.
+#
+@unittest.skipUnless(_IMPL_AVAILABLE, _SKIP_REASON)
+class TestVFRM09NonUnitQuaternion(_AnchorAssertions):
+    """V-FRM-09: T(quat) must equal T(k*quat) for every non-zero scalar k.
+
+    WHY THIS PROPERTY IS LOAD-BEARING
+    ---------------------------------
+    An RK stage evaluates the derivative at ``x_n + (h/2) k_1``, whose quaternion block
+    is **necessarily** not of unit norm.  Because ``T(k*quat) = k^2 T(quat)``, an
+    implementation that assumes unit input silently scales every aerodynamic and
+    propulsive force by ``||quat||^2`` in stages 2 through 4 of every single step.  The
+    trajectory that results is smooth, plausible, and wrong.
+
+    The specification therefore defines the map by *division* by ``quat . quat`` -- not
+    by normalising the input, which would change the function being integrated and
+    introduce a branch (NOTATION_AND_CONVENTIONS.md section 4, A-NUM-05).
+
+    WHY INVARIANCE ALONE WOULD BE AN INADEQUATE TEST
+    ------------------------------------------------
+    Asserting only ``T(quat) == T(2*quat)`` is satisfied by an implementation that
+    normalises its input internally -- exactly the behaviour the specification forbids.
+    It is also satisfied by an implementation that returns a constant.  This test
+    therefore checks invariance **and** agreement with an independently derived DCM
+    simultaneously; neither half is sufficient alone.
+
+    HAND DERIVATION (no implementation involved)
+    --------------------------------------------
+    Take the deliberately non-unit, non-axis-aligned quaternion
+
+        quat = (1, 2, 3, 4),   quat . quat = 1 + 4 + 9 + 16 = 30
+
+    With q0 = 1 and qv = (2, 3, 4), so qv . qv = 29:
+
+        (q0^2 - qv.qv) I = -28 I
+        2 qv qv^T        = [[8,12,16], [12,18,24], [16,24,32]]
+        -2 q0 [qv x]     = [[0,8,-6], [-8,0,4], [6,-4,0]]
+
+    Summing and dividing by 30:
+
+        T = [[-20, 20, 10], [4, -10, 28], [22, 20, 4]] / 30
+          = [[-2/3,   2/3,  1/3 ],
+             [ 2/15, -1/3,  14/15],
+             [11/15,  2/3,  2/15]]
+
+    This anchor is unusually strong: the entries are *exactly rational*, and the matrix
+    is orthonormal with determinant +1 in exact rational arithmetic (verified in
+    Fractions during derivation, not in floating point).  It is also asymmetric --
+    T[0][1] = 2/3 while T[1][0] = 2/15 -- so a transposed result differs in magnitude,
+    not merely in sign.
+
+    NON-VACUITY
+    -----------
+    Without the ``/(quat . quat)`` denominator the k=1 result is 30x too large:
+    entry [0][0] would be -20 rather than -2/3.  There is no tolerance at which that
+    passes.  Confirmed by mutation testing: deleting the denominator fails four of the
+    four scale factors here, by margins from 6.1 to 1.5e3.
+
+    WHAT THIS ANCHOR CANNOT ESTABLISH
+    ---------------------------------
+    A-NUM-05 asks for two things: that the map be scale-invariant, and that it be
+    achieved by *division* rather than by normalising the input.  This test establishes
+    the first.  It cannot establish the second, and neither can any other output-level
+    test: an implementation that unconditionally normalises a local copy of ``quat``
+    returns the same matrix -- measured, over 2000 random non-unit quaternions, as
+    agreeing to 5.6e-16.  The two are the same mathematical map.
+
+    That is not a gap in the test; it is a fact about the specification.  The part of
+    A-NUM-05 that a test can reach is the observable behaviour, which is pinned here.
+    The part it cannot reach is branch-freedom, which matters for the determinism
+    guarantee in docs/PROVENANCE.md section 5 and is a property of the *source*,
+    verifiable by reading it rather than by running it.  Recording the distinction so
+    that passing this test is not mistaken for having verified all of A-NUM-05.
+    """
+
+    # Deliberately non-unit (norm sqrt(30)) and non-axis-aligned (all three vector
+    # components non-zero).  The identity quaternion would be useless here: it is unit,
+    # axis-aligned, and its DCM is invariant under errors this test must catch.
+    QUAT = [1.0, 2.0, 3.0, 4.0]
+
+    # Hand-derived above.  Written as exact rational expressions rather than decimal
+    # approximations so the derivation stays legible in the source.
+    EXPECTED_DCM = [
+        [-2.0 / 3.0, 2.0 / 3.0, 1.0 / 3.0],
+        [2.0 / 15.0, -1.0 / 3.0, 14.0 / 15.0],
+        [11.0 / 15.0, 2.0 / 3.0, 2.0 / 15.0],
+    ]
+
+    # k = 1 establishes the literal; the rest establish invariance.  -7.25 is included
+    # because a negative, non-dyadic scale factor exercises sign handling and the
+    # double cover at the same time, and 0.5/2.0 bracket unity from both sides.
+    SCALE_FACTORS = (1.0, 2.0, 0.5, -7.25)
+
+    def test_v_frm_09_anchor_quaternion_is_fit_for_purpose(self):
+        """Guard on the anchor itself, not on the implementation.
+
+        If a later edit "tidies" QUAT into a unit or axis-aligned quaternion, this test
+        loses its power silently. This makes that edit fail loudly instead.
+        """
+        norm_sq = sum(x * x for x in self.QUAT)
+        self.assertEqual(
+            norm_sq, 30.0,
+            "V-FRM-09 requires a NON-UNIT anchor quaternion; quat.quat must be 30.",
+        )
+        self.assertTrue(
+            all(component != 0.0 for component in self.QUAT[1:]),
+            "V-FRM-09 requires a NON-AXIS-ALIGNED anchor: all three vector components "
+            "must be non-zero.",
+        )
+
+    def test_v_frm_09_scaled_quaternions_give_the_hand_derived_dcm(self):
+        for k in self.SCALE_FACTORS:
+            with self.subTest(scale=k):
+                scaled = [k * component for component in self.QUAT]
+                self.assert_matrix(
+                    dcm_b_from_i_quat(scaled), self.EXPECTED_DCM,
+                    f"V-FRM-09 (k = {k}): T(k * quat) must equal the hand-derived DCM "
+                    "for quat = (1,2,3,4). A result larger by a factor of "
+                    f"{k * k * 30.0:g} means the division by quat.quat is missing "
+                    "(audit F-3, A-NUM-05).",
+                )
+
+
+# ======================================================================================
+# V-FRM-10 — quaternion composition order
+# ======================================================================================
+#
+# TRACEABILITY
+#     audit finding F-4  ->  V-FRM-10  ->  quat_multiply / composition order
+#
+# See PRE_IMPLEMENTATION_MATHEMATICAL_AUDIT.md section 2.5.
+#
+@unittest.skipUnless(_IMPL_AVAILABLE, _SKIP_REASON)
+class TestVFRM10CompositionOrder(_AnchorAssertions):
+    """V-FRM-10: T(qa (x) qb) = T(qb) T(qa) -- the orders are REVERSED.
+
+    Quaternion multiplication is non-commutative; this test exists specifically to
+    prevent the composition-order error identified as F-4 during the pre-implementation
+    audit.  Matrices compose by adjacency, quaternions in this convention do not, and an
+    implementer would reasonably assume the two match.
+
+    WHY THE IDENTITY ALONE IS NOT ENOUGH
+    ------------------------------------
+    Checking only ``T(qa (x) qb) == T(qb) @ T(qa)`` compares two results produced by the
+    same implementation.  If ``quat_multiply`` and ``dcm_b_from_i_quat`` shared a
+    convention error the identity could still hold.  Every quantity below is therefore
+    pinned to an independently hand-derived literal, and the identity is checked *as a
+    consequence* of those literals rather than as the primary evidence.
+
+    ROTATION PAIR
+    -------------
+    Roll 90 deg and pitch 90 deg: distinct axes, and genuinely non-commuting.  (Two
+    rotations about the same axis commute, which would make this test vacuous.)  This is
+    a different numerical case from V-ATT-01 case 3, which uses yaw+pitch, so the two
+    are not duplicates.
+
+    HAND DERIVATION (no implementation involved), with h = sqrt(2)/2, h*h = 1/2:
+
+        qa = q_roll(90)  = (h, h, 0, 0)
+        qb = q_pitch(90) = (h, 0, h, 0)
+
+        qa (x) qb:
+            scalar = h*h - (h,0,0).(0,h,0)               = 1/2 - 0   = 1/2
+            vector = h*(0,h,0) + h*(h,0,0) + (h,0,0)x(0,h,0)
+                   = (0,1/2,0) + (1/2,0,0) + (0,0,1/2)   = (1/2, 1/2, 1/2)
+            => qa (x) qb = (1/2, 1/2, 1/2, 1/2)
+
+        qb (x) qa:
+            scalar = 1/2 - 0                                          = 1/2
+            vector = h*(h,0,0) + h*(0,h,0) + (0,h,0)x(h,0,0)
+                   = (1/2,0,0) + (0,1/2,0) + (0,0,-1/2) = (1/2, 1/2, -1/2)
+            => qb (x) qa = (1/2, 1/2, 1/2, -1/2)
+
+    The two differ in the last component -- the product is non-commutative, as required
+    for this test to discriminate anything.
+
+    Substituting each into the DCM formula by hand:
+
+        T(qa (x) qb) = [[0, 1, 0], [0, 0, 1], [1, 0, 0]]
+        T(qb (x) qa) = [[0, 0,-1], [1, 0, 0], [0,-1, 0]]
+
+    Independently, from the elementary matrices of NOTATION section 4:
+
+        R_y(90) @ R_x(90) = [[0, 1, 0], [0, 0, 1], [1, 0, 0]]   == T(qa (x) qb)
+        R_x(90) @ R_y(90) = [[0, 0,-1], [1, 0, 0], [0,-1, 0]]   == T(qb (x) qa)
+
+    which is the identity T(qa (x) qb) = T(qb) @ T(qa) reached by a second route.
+    """
+
+    QUAT_A_ROLL90 = [SQRT2_2, SQRT2_2, 0.0, 0.0]
+    QUAT_B_PITCH90 = [SQRT2_2, 0.0, SQRT2_2, 0.0]
+
+    QUAT_A_TIMES_B = [0.5, 0.5, 0.5, 0.5]
+    QUAT_B_TIMES_A = [0.5, 0.5, 0.5, -0.5]
+
+    DCM_A_TIMES_B = [[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]]
+    DCM_B_TIMES_A = [[0.0, 0.0, -1.0], [1.0, 0.0, 0.0], [0.0, -1.0, 0.0]]
+
+    def test_v_frm_10_hamilton_product_both_orders(self):
+        """Both orders pinned to literals -- which is what establishes that the product
+        is non-commutative here, rather than merely asserting that it is."""
+        self.assert_vector(
+            quat_multiply(self.QUAT_A_ROLL90, self.QUAT_B_PITCH90),
+            self.QUAT_A_TIMES_B,
+            "V-FRM-10: hand-computed Hamilton product qa (x) qb.",
+        )
+        self.assert_vector(
+            quat_multiply(self.QUAT_B_PITCH90, self.QUAT_A_ROLL90),
+            self.QUAT_B_TIMES_A,
+            "V-FRM-10: hand-computed Hamilton product qb (x) qa. If this equals the "
+            "qa (x) qb value, the implementation has made the product commutative and "
+            "the composition-order guarantee is void.",
+        )
+
+    def test_v_frm_10_composition_identity_against_literals(self):
+        """T(qa (x) qb) = T(qb) T(qa), with BOTH sides anchored independently."""
+        composed = quat_multiply(self.QUAT_A_ROLL90, self.QUAT_B_PITCH90)
+        self.assert_matrix(
+            dcm_b_from_i_quat(composed), self.DCM_A_TIMES_B,
+            "V-FRM-10 (left side): the DCM of the composed quaternion.",
+        )
+        # Right side of the identity, built by multiplying the two single-axis DCMs in
+        # the REVERSED order relative to the quaternion product. Anchored to the same
+        # literal, so agreement is not evidence that two buggy paths concur.
+        dcm_b = _rows(dcm_b_from_i_quat(self.QUAT_B_PITCH90))
+        dcm_a = _rows(dcm_b_from_i_quat(self.QUAT_A_ROLL90))
+        product = [[sum(dcm_b[i][k] * dcm_a[k][j] for k in range(3)) for j in range(3)]
+                   for i in range(3)]
+        self.assert_matrix(
+            product, self.DCM_A_TIMES_B,
+            "V-FRM-10 (right side): T(qb) @ T(qa) must equal the same hand-derived DCM. "
+            "If T(qa) @ T(qb) were used instead the result would be the OTHER "
+            "hand-derived matrix, DCM_B_TIMES_A.",
+        )
+
+    def test_v_frm_10_reversed_order_gives_a_different_anchored_result(self):
+        """The wrong order does not merely differ -- it lands on a second, separately
+        hand-derived matrix. Pinning the wrong answer too is what makes this test
+        diagnostic rather than just a mismatch report."""
+        reversed_product = quat_multiply(self.QUAT_B_PITCH90, self.QUAT_A_ROLL90)
+        self.assert_matrix(
+            dcm_b_from_i_quat(reversed_product), self.DCM_B_TIMES_A,
+            "V-FRM-10: the reversed product must give the hand-derived DCM for "
+            "qb (x) qa.",
+        )
+
+    def test_v_frm_10_orders_are_measurably_different(self):
+        """Guards against a commutative implementation making the whole class vacuous.
+
+        Asserted numerically against a stated threshold rather than with a qualitative
+        condition: the two hand-derived matrices differ by exactly 1.0 in several
+        entries, so anything below that is a real regression.
+        """
+        forward = _rows(dcm_b_from_i_quat(
+            quat_multiply(self.QUAT_A_ROLL90, self.QUAT_B_PITCH90)))
+        backward = _rows(dcm_b_from_i_quat(
+            quat_multiply(self.QUAT_B_PITCH90, self.QUAT_A_ROLL90)))
+        separation = _max_abs_diff(forward, backward)
+        self.assertGreaterEqual(
+            separation, 1.0,
+            "V-FRM-10: T(qa (x) qb) and T(qb (x) qa) must be measurably different "
+            f"(hand-derived separation is exactly 1.0); got {separation:.3e}. A "
+            "separation near zero means quaternion multiplication has become "
+            "commutative, which would make every composition-order test vacuous.",
         )
 
 
