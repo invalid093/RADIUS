@@ -1129,6 +1129,42 @@ class TestVFRM05WindFrameImplementation(_AnchorAssertions, _WindFrameAnchors):
             "V-FRM-05: a general wind-frame vector, exercising all nine entries.",
         )
 
+    def test_v_frm_05_implementation_secondary_properties(self):
+        """Finiteness, orthonormality and determinant +1 away from the anchor points.
+
+        **Secondary properties, deliberately labelled as such.** They catch a NaN, a
+        typo that breaks the rotation structure, or a scaling error -- but they cannot
+        distinguish the intended convention from its transpose, from the superseded F-2
+        form, or from the reversed composition order: all four of those are orthonormal
+        with determinant +1. The literal and vector anchors above remain the correctness
+        evidence; these only extend coverage to angles the anchors do not visit.
+        """
+        for alpha_deg, beta_deg in ((0.0, 0.0), (-15.0, 40.0),
+                                    (75.0, -80.0), (10.0, 5.0)):
+            with self.subTest(alpha_deg=alpha_deg, beta_deg=beta_deg):
+                dcm = _rows(dcm_b_from_w(math.radians(alpha_deg),
+                                         math.radians(beta_deg)))
+                for i in range(3):
+                    for j in range(3):
+                        self.assertTrue(
+                            math.isfinite(dcm[i][j]),
+                            f"V-FRM-05: entry [{i}][{j}] is not finite.",
+                        )
+                product = [[sum(dcm[i][k] * dcm[j][k] for k in range(3))
+                            for j in range(3)] for i in range(3)]
+                self.assert_matrix(
+                    product, [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                    "V-FRM-05 (secondary): T_BW must be orthonormal.",
+                )
+                det = (dcm[0][0] * (dcm[1][1] * dcm[2][2] - dcm[1][2] * dcm[2][1])
+                       - dcm[0][1] * (dcm[1][0] * dcm[2][2] - dcm[1][2] * dcm[2][0])
+                       + dcm[0][2] * (dcm[1][0] * dcm[2][1] - dcm[1][1] * dcm[2][0]))
+                self.assertAlmostEqual(
+                    det, 1.0, places=12,
+                    msg="V-FRM-05 (secondary): determinant must be +1. A determinant "
+                        "of -1 would mean a reflection, not a rotation.",
+                )
+
     def test_v_frm_05_implementation_is_not_the_superseded_convention(self):
         """Explicit guard against a regression to the pre-audit form."""
         actual = _rows(dcm_b_from_w(_A_30, _B_60))

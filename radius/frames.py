@@ -40,6 +40,10 @@ matrix built here is the transpose of the conventional Hamilton *active* rotatio
 matrix — note the sign of the ``-2 q0 [qv x]`` term — so it corresponds to
 ``v~_B = quat* (x) v~_I (x) quat`` and not to ``quat (x) v~ (x) quat*``.
 
+**Wind frame:** ``T_BW(alpha, beta) = R_y(alpha) R_z(-beta)``, so ``v_B = T_BW @ v_W``.
+Note the sign on beta and the composition order: both were wrong in the specification
+before audit finding F-2, and both are load-bearing. See :func:`dcm_b_from_w`.
+
 **Non-unit quaternions are supported by division, not normalisation.** See
 :func:`dcm_b_from_i_quat`.
 
@@ -69,6 +73,7 @@ from numpy.typing import ArrayLike, NDArray
 __all__ = [
     "dcm_b_from_i_euler",
     "dcm_b_from_i_quat",
+    "dcm_b_from_w",
     "quat_b_from_i_euler",
 ]
 
@@ -252,3 +257,55 @@ def dcm_b_from_i_quat(quat: ArrayLike) -> NDArray[np.float64]:
         - 2.0 * q0 * skew
     )
     return unscaled / norm_sq
+
+
+def dcm_b_from_w(alpha_rad: float, beta_rad: float) -> NDArray[np.float64]:
+    r"""Direction cosine matrix ``T_BW`` from angle of attack and sideslip.
+
+    .. math::  \mathbf{T}_{BW} = \mathbf{R}_y(\alpha)\,\mathbf{R}_z(-\beta)
+
+    so that ``v_B = dcm_b_from_w(alpha, beta) @ v_W`` — the passive "to <- from"
+    direction used everywhere in this module.
+
+    Parameters
+    ----------
+    alpha_rad:
+        Angle of attack. Radians. Positive when the relative wind arrives from below
+        the vehicle's x-y plane.
+    beta_rad:
+        Sideslip angle. Radians. Positive when the relative wind arrives from the
+        vehicle's right.
+
+    Returns
+    -------
+    ``(3, 3)`` passive transformation, orthonormal with determinant ``+1``.
+
+    Notes
+    -----
+    **The sign on beta and the composition order are both load-bearing, and both were
+    wrong in the specification before the pre-implementation audit.** RS-001 previously
+    carried ``R_y(-alpha) R_z(beta)``, which inverts *both* angle senses: it is audit
+    finding F-2, and it would have reversed every sideslip-dependent side force and
+    yawing moment while leaving a matrix that is still orthonormal with determinant +1.
+
+    The corrected form is forced by the definitions of the angles themselves rather than
+    chosen. From ``alpha = arctan2(w, u)`` and ``beta = arcsin(v / V)``, the
+    air-relative velocity in body axes is ``V (cos a cos b, sin b, sin a cos b)``; that
+    same vector is by definition purely along ``x_W``, so it must equal ``V`` times the
+    first column of ``T_BW``. Only ``R_y(alpha) R_z(-beta)`` has that first column.
+
+    Verified against the independently hand-derived V-FRM-05 anchors in
+    ``tests/test_frames.py``, which were written before this function existed. Mutation
+    testing confirms those anchors reject the wrong sideslip sign, the superseded F-2
+    form, the reversed composition order, and the active/passive transpose.
+
+    This is a **coordinate transformation**. It is not an aerodynamic model, and it
+    establishes nothing about aerodynamic coefficients, forces or moments — the
+    coefficient-provenance gap (`A-AER-03`, quality-gate question Q8) is untouched by it.
+
+    No validation, clipping or wrapping is applied to the angles: they are used exactly
+    as supplied. The wind frame is degenerate at zero airspeed, but that is a property of
+    *deriving* alpha and beta from a velocity, not of this transformation, and the
+    handling belongs where the derivation lives (RS-007 section 5).
+    """
+    return _r_y(alpha_rad) @ _r_z(-beta_rad)

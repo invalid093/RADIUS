@@ -38,10 +38,9 @@ this table said "verification tests written: none", which stopped being true at 
 
 | | |
 |---|---|
-| Verified | **the frame and attitude conventions only** — V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01, against hand-derived anchors. Nothing else |
-| Established but not yet executable | **V-FRM-05** — the wind-frame anchors are derived, pinned and self-checking, but `dcm_b_from_w` does not exist, so the four tests applying them to code are skipped, not passing |
+| Verified | **the frame and attitude conventions only** — V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01, against hand-derived anchors. Nothing else |
 | Validated | **nothing** |
-| Verification tests written | **30**: 26 passing, 0 failing, 4 skipped (all four the V-FRM-05 implementation tests named above) — out of 65+ *specified* across RS-001…RS-008 |
+| Verification tests written | **31**: 31 passing, 0 failing, **0 skipped** — out of 65+ *specified* across RS-001…RS-008 |
 | Independent reference data held | **none** |
 
 ### Traceability — audit findings to their guarding anchors
@@ -53,11 +52,19 @@ independent anchors rather than being covered incidentally:
 |---|---|---|---|
 | **F-3** | `A-NUM-05` | **V-FRM-09** | `dcm_b_from_i_quat` is scale-invariant *and* agrees with an independently derived DCM. Uses a non-unit, non-axis-aligned quaternion whose exact rational DCM is hand-derived |
 | **F-4** | — | **V-FRM-10** | `T(qa ⊗ qb) = T(qb) T(qa)`. Both sides pinned to literals; the reversed order is pinned to a *second* literal, so the wrong answer is anchored too |
-| **F-2** | — | **V-FRM-05** | `T_BW = R_y(α) R_z(−β)`. The corrected relationship was **independently re-derived** rather than assumed: inverting the definitions of α and β forces the first column of `T_BW` to be `(cos α cos β, sin β, sin α cos β)`, which the corrected form satisfies and the superseded `R_y(−α)R_z(β)` contradicts. Anchors at (α=0, β=30°) and (α=30°, β=60°), each pinned as a literal, with the superseded and reversed-order matrices pinned too |
+| **F-2** | — | **V-FRM-05** → `radius.frames.dcm_b_from_w` | `T_BW = R_y(α) R_z(−β)`, **implemented and verified**. The corrected relationship was **independently re-derived** rather than assumed: inverting the definitions of α and β forces the first column of `T_BW` to be `(cos α cos β, sin β, sin α cos β)`, which the corrected form satisfies and the superseded `R_y(−α)R_z(β)` contradicts. Anchors at (α=0, β=30°) and (α=30°, β=60°), each pinned as a literal, with the superseded and reversed-order matrices pinned too |
 
 **V-FRM-05 verifies a coordinate-transformation convention, not an aerodynamic model.**
-No coefficient, force or moment appears in it, and it leaves the Q8 gate (no traceable
-aerodynamic coefficient source) exactly where it was.
+No coefficient, force or moment appears in it or in `dcm_b_from_w`. Implementing the
+transform establishes that the *convention* is encoded correctly; it says nothing about
+whether any aerodynamic model is physically valid, and it leaves the Q8 gate (no
+traceable aerodynamic coefficient source, `A-AER-03`) exactly where it was — **open**.
+
+Mutation evidence for `dcm_b_from_w` (2026-09-09, module path verified inside the
+interpreter running the suite): the correct form passes 31/31; the wrong sideslip sign,
+the superseded `R_y(−α)R_z(β)`, and the active/passive transpose each fail 4 tests; the
+reversed composition order fails 3 — three rather than four because case A (α=0) cannot
+distinguish composition order, which the anchor asserts explicitly.
 
 `LIMITATION` on V-FRM-09: it establishes the observable half of `A-NUM-05`
 (scale invariance) but **cannot** establish that the implementation divides rather than
