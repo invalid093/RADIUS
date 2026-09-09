@@ -1,4 +1,4 @@
-"""V-FRM-08 and V-ATT-01 — independent, hand-computed frame and attitude anchors.
+"""V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01 — hand-computed frame anchors.
 
 WHY THIS FILE EXISTS BEFORE THE IMPLEMENTATION
 ----------------------------------------------
@@ -50,15 +50,21 @@ CONVENTIONS ENCODED (authoritative source: docs/methodology/NOTATION_AND_CONVENT
 
 STATUS
 ------
-Nothing is implemented.  These tests skip until ``radius.frames`` exists.  That is the
-intended state: the anchors are recorded first so the implementation is written against
-a specification it cannot quietly redefine.
+``radius.frames`` and ``radius.math.quaternion`` exist, so the attitude anchors execute
+against real code.  The **wind frame does not exist yet**: the V-FRM-05 anchors are
+established and executing as properties of their own hand-derived literals, while the
+four tests that apply them to ``dcm_b_from_w`` skip until it is written.  Those are the
+only skips in this file, and their reason names the missing function explicitly.
 
-The API names below are this file's *proposal*, consistent with the naming rules in
-NOTATION_AND_CONVENTIONS.md section 8.  If Phase 2B chooses different names, update the
-imports — but **the numerical anchors must not change**.  A failing anchor means the
-implementation is wrong, or the convention has been deliberately changed via an ADR and
-this file is stale.  It never means the anchor should be adjusted to fit.
+An anchor being mathematically established is not the same as an executable test running
+against an implementation.  This file keeps the two visibly separate rather than letting
+a skip read as coverage.
+
+API names here are this file's *proposal*, consistent with the naming rules in
+NOTATION_AND_CONVENTIONS.md section 8.  If an implementation chooses different names,
+update the imports — but **the numerical anchors must not change**.  A failing anchor
+means the implementation is wrong, or the convention has been deliberately changed via
+an ADR and this file is stale.  It never means the anchor should be adjusted to fit.
 
 DEMONSTRATED TO HAVE TEETH
 --------------------------
@@ -66,8 +72,8 @@ A suite that only skips proves nothing, and a suite that passes under a wrong
 convention is worse than none.  Before this file was committed it was run against
 throwaway implementations carrying deliberate, individually injected convention errors
 (mutation testing, 2026-09-09; harness kept out of the repository as a scratch
-artifact).  Result: the correct implementation passed all 13 tests, and every one of
-the following was caught —
+artifact).  The correct implementation passes every test, and each of the following was
+caught —
 
     active/T_i_from_b instead of passive T_b_from_i ....... 16 failures
     scalar-LAST quaternion ordering ....................... 7 failures
@@ -90,7 +96,7 @@ From the repository root::
 
 **Do not use ``python tests/test_frames.py``.**  Running the file as a script puts
 ``tests/`` on ``sys.path`` rather than the repository root, so ``import radius`` fails,
-every test skips, and unittest prints ``OK (skipped=13)``.  That reads as success while
+every test skips, and unittest prints ``OK (skipped=N)``.  That reads as success while
 having verified nothing — the precise failure mode this file exists to prevent.  The
 ``__main__`` block below is retained only for use with the repository root already on
 ``PYTHONPATH``.
@@ -145,6 +151,7 @@ TOL = 1e-12
 SQRT2_2 = math.sqrt(2.0) / 2.0   # 0.70710678118654752
 SQRT2_4 = math.sqrt(2.0) / 4.0   # 0.35355339059327376
 SQRT3_2 = math.sqrt(3.0) / 2.0   # 0.86602540378443865
+SQRT3_4 = math.sqrt(3.0) / 4.0   # 0.43301270189221932
 SQRT6_4 = math.sqrt(6.0) / 4.0   # 0.61237243569579452
 
 
@@ -788,6 +795,352 @@ class TestVFRM10CompositionOrder(_AnchorAssertions):
             f"(hand-derived separation is exactly 1.0); got {separation:.3e}. A "
             "separation near zero means quaternion multiplication has become "
             "commutative, which would make every composition-order test vacuous.",
+        )
+
+
+# ======================================================================================
+# V-FRM-05 — wind-frame transformation convention
+# ======================================================================================
+#
+# TRACEABILITY
+#     audit finding F-2  ->  V-FRM-05  ->  T_BW (wind frame -> body frame)
+#
+# See PRE_IMPLEMENTATION_MATHEMATICAL_AUDIT.md section 9.1 and RS-001 section 2.3.
+#
+# THIS VERIFIES A COORDINATE TRANSFORMATION CONVENTION.  It is not an aerodynamic test
+# and it validates no aerodynamic model: no coefficient, force or moment appears here,
+# and the Q8 gate (no traceable coefficient source) is untouched by it.
+#
+# ---------------------------------------------------------------------------------
+# INDEPENDENT RE-DERIVATION (the audit's corrected result was re-checked, not assumed)
+# ---------------------------------------------------------------------------------
+# RS-007 section 2 defines, from v_rel resolved in body axes as (u, v, w):
+#
+#       alpha = arctan2(w, u)          beta = arcsin(v / V)
+#
+# Inverting those two definitions gives the air-relative velocity in body axes:
+#
+#       v_B = V (cos a cos b,  sin b,  sin a cos b)
+#
+# In the wind frame the same physical vector is by definition purely along x_W, so
+# v_W = (V, 0, 0).  Since v_B = T_BW v_W = V * (first column of T_BW), the definitions
+# of alpha and beta FORCE, with no reference to any matrix composition:
+#
+#       first column of T_BW = (cos a cos b,  sin b,  sin a cos b)         (*)
+#
+# That is the independent constraint.  Composing the documented passive elementary
+# matrices of NOTATION section 4:
+#
+#   R_z(-b) = [[ cos b, -sin b, 0], [ sin b,  cos b, 0], [ 0, 0, 1]]
+#   R_y(a)  = [[ cos a, 0, -sin a], [ 0, 1, 0],          [ sin a, 0, cos a]]
+#
+#   R_y(a) R_z(-b) = [[ cos a cos b,  -cos a sin b,  -sin a],
+#                     [ sin b,         cos b,         0    ],
+#                     [ sin a cos b,  -sin a sin b,   cos a]]
+#
+# whose first column is exactly (*).  The superseded form R_y(-a) R_z(b) gives first
+# column (cos a cos b, -sin b, -sin a cos b) -- both angles negated -- and therefore
+# contradicts the definitions.  The audit's correction is confirmed by a route that
+# does not use the audit's own reasoning.
+#
+_A_ZERO = 0.0
+_B_30 = math.radians(30.0)
+_A_30 = math.radians(30.0)
+_B_60 = math.radians(60.0)
+
+
+class _WindFrameAnchors:
+    """The hand-derived V-FRM-05 literals, in a plain container.
+
+    Deliberately NOT a TestCase. Both test classes below read their expected values from
+    here, so the anchor and the implementation check are pinned to the same numbers with
+    no possibility of drift -- and without the implementation class inheriting (and
+    therefore re-collecting, then skipping) the anchor class's test methods.
+    """
+
+    CASE_A_DCM = [[SQRT3_2, -0.5, 0.0],
+                  [0.5, SQRT3_2, 0.0],
+                  [0.0, 0.0, 1.0]]
+    # The superseded F-2 convention at alpha = 0, i.e. R_y(0) R_z(+beta).
+    CASE_A_DCM_WRONG_SIGN = [[SQRT3_2, 0.5, 0.0],
+                             [-0.5, SQRT3_2, 0.0],
+                             [0.0, 0.0, 1.0]]
+    CASE_A_V_WIND = [100.0, 0.0, 0.0]
+    CASE_A_V_BODY = [50.0 * math.sqrt(3.0), 50.0, 0.0]
+
+    CASE_B_DCM = [[SQRT3_4, -0.75, -0.5],
+                  [SQRT3_2, 0.5, 0.0],
+                  [0.25, -SQRT3_4, SQRT3_2]]
+    # R_y(-alpha) R_z(+beta) -- the exact form RS-001 carried before the audit.
+    CASE_B_DCM_SUPERSEDED = [[SQRT3_4, 0.75, 0.5],
+                             [-SQRT3_2, 0.5, 0.0],
+                             [-0.25, -SQRT3_4, SQRT3_2]]
+    # R_z(-beta) R_y(alpha) -- correct factors, reversed composition order.
+    CASE_B_DCM_REVERSED_ORDER = [[SQRT3_4, -SQRT3_2, -0.25],
+                                 [0.75, 0.5, -SQRT3_4],
+                                 [0.5, 0.0, SQRT3_2]]
+    CASE_B_V_WIND = [100.0, 0.0, 0.0]
+    CASE_B_V_BODY = [25.0 * math.sqrt(3.0), 50.0 * math.sqrt(3.0), 25.0]
+    # A wind-frame vector with three distinct non-zero components, so that every one of
+    # the nine matrix entries contributes to the result.
+    CASE_B_V_WIND_GENERAL = [1.0, 2.0, 3.0]
+    CASE_B_V_BODY_GENERAL = [math.sqrt(3.0) / 4.0 - 3.0,
+                             math.sqrt(3.0) / 2.0 + 1.0,
+                             0.25 + math.sqrt(3.0)]
+
+
+class TestVFRM05WindFrameAnchor(_AnchorAssertions, _WindFrameAnchors):
+    """V-FRM-05: the hand-derived wind-frame anchors, and what they discriminate.
+
+    This class runs **now**, with no implementation, because everything it asserts is a
+    property of the hand-derived literals themselves or of the definitions in (*) above.
+    It establishes the anchor mathematically and executably; the separate class below
+    applies it to an implementation once one exists.
+
+    CASE A -- alpha = 0, beta = +30 deg.  Sideslip sign discriminator.
+        T_BW = R_y(0) R_z(-30 deg) = [[sqrt3/2, -1/2, 0],
+                                      [1/2,   sqrt3/2, 0],
+                                      [0,       0,     1]]
+        A positive sideslip must put a POSITIVE component on y_B: with V = 100,
+        v_W = (100, 0, 0) maps to v_B = (50 sqrt3, 50, 0).  Reverting the F-2 sign
+        gives v_B = (50 sqrt3, -50, 0) -- the aircraft sideslipping the wrong way.
+
+    CASE B -- alpha = 30 deg, beta = 60 deg.  Coupled, asymmetric, nine distinct
+    entries, no vanishing sine or cosine:
+        T_BW = [[sqrt3/4, -3/4,     -1/2   ],
+                [sqrt3/2,  1/2,      0     ],
+                [1/4,     -sqrt3/4,  sqrt3/2]]
+
+    WHY CASE B IS NOT OPTIONAL
+    --------------------------
+    At alpha = 0 the two composition orders **coincide**: R_y(0) R_z(-b) equals
+    R_z(-b) R_y(0), because R_y(0) is the identity.  Case A therefore cannot detect a
+    reversed composition order at all, and a suite containing only Case A would look
+    thorough while being blind to one of the three errors this anchor exists to catch.
+    That is asserted explicitly below rather than left as a remark.
+    """
+
+    def test_v_frm_05_first_column_matches_the_alpha_beta_definition(self):
+        """The core of F-2, by the independent route (*).
+
+        The anchor matrices were derived from the elementary-matrix composition.  Their
+        first columns are checked here against ``(cos a cos b, sin b, sin a cos b)``,
+        which comes from inverting the *definitions* of alpha and beta and never touches
+        a composition.  Two independent derivations agreeing is the evidence; either one
+        alone would not be.
+        """
+        for label, alpha, beta, dcm in (
+            ("case A", _A_ZERO, _B_30, self.CASE_A_DCM),
+            ("case B", _A_30, _B_60, self.CASE_B_DCM),
+        ):
+            with self.subTest(case=label):
+                required = [math.cos(alpha) * math.cos(beta),
+                            math.sin(beta),
+                            math.sin(alpha) * math.cos(beta)]
+                first_column = [dcm[0][0], dcm[1][0], dcm[2][0]]
+                self.assert_vector(
+                    first_column, required,
+                    f"V-FRM-05 ({label}): the first column of T_BW is forced by the "
+                    "definitions of alpha and beta to be (cos a cos b, sin b, "
+                    "sin a cos b). If this fails, the composition and the angle "
+                    "definitions disagree -- which is exactly defect F-2.",
+                )
+
+    def test_v_frm_05_superseded_convention_contradicts_the_definition(self):
+        """The pre-audit form must FAIL the constraint (*), or the anchor proves nothing.
+
+        Guards against the anchor being vacuous: if the superseded convention also
+        satisfied the definition, this test would not distinguish the two and F-2 would
+        not have been a defect.
+        """
+        required_y = math.sin(_B_60)  # +sin(beta)
+        superseded_y = self.CASE_B_DCM_SUPERSEDED[1][0]
+        self.assertAlmostEqual(
+            superseded_y, -required_y, places=12,
+            msg="V-FRM-05: the superseded R_y(-a)R_z(b) form must yield -sin(beta) in "
+                "the first column, i.e. the opposite sideslip sense.",
+        )
+        self.assertGreater(
+            abs(superseded_y - required_y), 1.7,
+            "V-FRM-05: the superseded form must differ from the definition by a large "
+            "margin (hand-derived separation is 2 sin 60 deg = sqrt3 ~ 1.732).",
+        )
+
+    def test_v_frm_05_case_a_discriminates_the_sideslip_sign(self):
+        """Positive beta must put a POSITIVE component on y_B.
+
+        Threshold note: the hand-derived separation is exactly 1.0, but sin(30 deg)
+        evaluates to 0.49999999999999994, so the computed separation is 1 ULP below 1.0.
+        The threshold is set just under the exact value for that reason and for no
+        other; it is nowhere near the ~1e-16 noise floor.
+        """
+        separation = _max_abs_diff(self.CASE_A_DCM, self.CASE_A_DCM_WRONG_SIGN)
+        self.assertGreater(
+            separation, 0.99,
+            "V-FRM-05 case A: the corrected and reverted sideslip signs must be "
+            f"measurably different (hand-derived separation 1.0); got {separation:.3e}.",
+        )
+        # And the physically meaningful consequence, not just a matrix difference.
+        self.assert_vector(
+            _matvec(self.CASE_A_DCM, self.CASE_A_V_WIND), self.CASE_A_V_BODY,
+            "V-FRM-05 case A: v_W = (100,0,0) at beta = +30 deg must give "
+            "v_B = (50 sqrt3, +50, 0).",
+        )
+        wrong = _matvec(self.CASE_A_DCM_WRONG_SIGN, self.CASE_A_V_WIND)
+        self.assertLess(
+            wrong[1], -49.0,
+            "V-FRM-05 case A: under the reverted sign the same vector must acquire a "
+            "NEGATIVE y_B component (-50), i.e. sideslip to the wrong side. If this "
+            "does not hold the two conventions are not being distinguished.",
+        )
+
+    def test_v_frm_05_case_b_discriminates_composition_order(self):
+        """R_y(a) R_z(-b) vs R_z(-b) R_y(a), with both pinned to literals.
+
+        Both orders are separately hand-derived, so this is not a comparison of two
+        outputs of one implementation: the wrong answer is anchored too.
+        """
+        separation = _max_abs_diff(self.CASE_B_DCM, self.CASE_B_DCM_REVERSED_ORDER)
+        self.assertGreater(
+            separation, 0.4,
+            "V-FRM-05 case B: the two composition orders must be measurably different "
+            f"(hand-derived separation sqrt3/4 ~ 0.433); got {separation:.3e}.",
+        )
+
+    def test_v_frm_05_case_b_discriminates_active_passive_inversion(self):
+        """The transpose is also a valid rotation with det +1, so orthonormality and
+        determinant cannot tell the intended convention from its inverse. Only a pinned
+        asymmetric matrix can."""
+        separation = _max_abs_diff(self.CASE_B_DCM, _transpose(self.CASE_B_DCM))
+        self.assertGreater(
+            separation, 1.5,
+            "V-FRM-05 case B: T_BW must be measurably different from its transpose "
+            f"(hand-derived separation ~1.616); got {separation:.3e}. A small value "
+            "would mean the anchor cannot detect an active/passive inversion.",
+        )
+
+    def test_v_frm_05_alpha_zero_cannot_discriminate_composition_order(self):
+        """Why case B exists. At alpha = 0 the two orders coincide exactly, so case A is
+        blind to a reversed composition. Asserting this keeps anyone from later deleting
+        case B as redundant."""
+        reversed_at_alpha_zero = [[SQRT3_2, -0.5, 0.0],
+                                  [0.5, SQRT3_2, 0.0],
+                                  [0.0, 0.0, 1.0]]  # R_z(-30) R_y(0), by hand
+        self.assertLess(
+            _max_abs_diff(self.CASE_A_DCM, reversed_at_alpha_zero), TOL,
+            "V-FRM-05: at alpha = 0 the composition orders are identical. If this ever "
+            "fails the reasoning for requiring case B has changed and should be "
+            "re-examined.",
+        )
+
+    def test_v_frm_05_anchors_are_orthonormal_with_unit_determinant(self):
+        """A sanity check on the LITERALS -- catches a transcription slip in this file.
+
+        Explicitly NOT evidence of convention correctness: the transpose, the superseded
+        form and the reversed order are all orthonormal with determinant +1 too. That is
+        precisely why the discriminating tests above exist.
+        """
+        for label, dcm in (("case A", self.CASE_A_DCM), ("case B", self.CASE_B_DCM)):
+            with self.subTest(case=label):
+                product = [[sum(dcm[i][k] * dcm[j][k] for k in range(3))
+                            for j in range(3)] for i in range(3)]
+                self.assert_matrix(
+                    product, [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                    f"V-FRM-05 ({label}): the hand-transcribed literal must be "
+                    "orthonormal. A failure here is a typo in this test file, not a "
+                    "defect in the implementation.",
+                )
+                det = (dcm[0][0] * (dcm[1][1] * dcm[2][2] - dcm[1][2] * dcm[2][1])
+                       - dcm[0][1] * (dcm[1][0] * dcm[2][2] - dcm[1][2] * dcm[2][0])
+                       + dcm[0][2] * (dcm[1][0] * dcm[2][1] - dcm[1][1] * dcm[2][0]))
+                self.assertAlmostEqual(
+                    det, 1.0, places=12,
+                    msg=f"V-FRM-05 ({label}): literal must have determinant +1.",
+                )
+
+
+# --------------------------------------------------------------------------------------
+# V-FRM-05 applied to an implementation.
+#
+# PROPOSED INTERFACE, not yet implemented (RS-001 section 2.3; naming per
+# NOTATION_AND_CONVENTIONS.md section 8, "to <- from"):
+#
+#     radius.frames.dcm_b_from_w(alpha_rad, beta_rad) -> 3x3
+#
+# It has its own import guard so that its absence cannot skip the rest of this file --
+# a single shared guard would have silently disabled all 19 passing tests the moment a
+# not-yet-written name was added to it.
+# --------------------------------------------------------------------------------------
+try:  # pragma: no cover - exercised only once the wind frame is implemented
+    from radius.frames import dcm_b_from_w
+
+    _WIND_IMPL_AVAILABLE = True
+    _WIND_SKIP_REASON = ""
+except ImportError as _wind_exc:
+    _WIND_IMPL_AVAILABLE = False
+    _WIND_SKIP_REASON = (
+        "radius.frames.dcm_b_from_w is not implemented yet. The V-FRM-05 anchors above "
+        f"are established and executing; only their application to code waits. ({_wind_exc})"
+    )
+
+
+@unittest.skipUnless(_WIND_IMPL_AVAILABLE, _WIND_SKIP_REASON)
+class TestVFRM05WindFrameImplementation(_AnchorAssertions, _WindFrameAnchors):
+    """Applies the V-FRM-05 anchors to ``dcm_b_from_w`` once it exists.
+
+    Reads its expected values from ``_WindFrameAnchors``, the same plain container the
+    anchor class uses, so the two cannot drift apart. It deliberately does **not**
+    inherit from the anchor TestCase: unittest would then re-collect all seven anchor
+    tests here and skip them, reporting seven misleading skips for tests that are in
+    fact running and passing in the class above.
+    """
+
+    def test_v_frm_05_implementation_case_a(self):
+        self.assert_matrix(
+            dcm_b_from_w(_A_ZERO, _B_30), self.CASE_A_DCM,
+            "V-FRM-05 case A: dcm_b_from_w(0, 30 deg) must equal R_y(0) R_z(-30 deg).",
+        )
+
+    def test_v_frm_05_implementation_case_b(self):
+        self.assert_matrix(
+            dcm_b_from_w(_A_30, _B_60), self.CASE_B_DCM,
+            "V-FRM-05 case B: dcm_b_from_w(30 deg, 60 deg) must equal "
+            "R_y(30 deg) R_z(-60 deg).",
+        )
+
+    def test_v_frm_05_implementation_passive_direction(self):
+        """v_B = T_BW v_W, checked on vectors whose images are independently known.
+
+        Orthonormality would pass for the transpose; these vectors would not.
+        """
+        self.assert_vector(
+            _matvec(dcm_b_from_w(_A_ZERO, _B_30), self.CASE_A_V_WIND),
+            self.CASE_A_V_BODY,
+            "V-FRM-05: positive sideslip must give a positive y_B component.",
+        )
+        self.assert_vector(
+            _matvec(dcm_b_from_w(_A_30, _B_60), self.CASE_B_V_WIND),
+            self.CASE_B_V_BODY,
+            "V-FRM-05: air-relative velocity through the coupled case.",
+        )
+        self.assert_vector(
+            _matvec(dcm_b_from_w(_A_30, _B_60), self.CASE_B_V_WIND_GENERAL),
+            self.CASE_B_V_BODY_GENERAL,
+            "V-FRM-05: a general wind-frame vector, exercising all nine entries.",
+        )
+
+    def test_v_frm_05_implementation_is_not_the_superseded_convention(self):
+        """Explicit guard against a regression to the pre-audit form."""
+        actual = _rows(dcm_b_from_w(_A_30, _B_60))
+        self.assertGreater(
+            _max_abs_diff(actual, self.CASE_B_DCM_SUPERSEDED), 1.7,
+            "V-FRM-05: the implementation matches the SUPERSEDED R_y(-a)R_z(b) form "
+            "(audit finding F-2). Both angle senses are inverted.",
+        )
+        self.assertGreater(
+            _max_abs_diff(actual, self.CASE_B_DCM_REVERSED_ORDER), 0.4,
+            "V-FRM-05: the implementation matches R_z(-b)R_y(a) -- correct factors, "
+            "reversed composition order.",
         )
 
 
