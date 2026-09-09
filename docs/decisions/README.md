@@ -14,9 +14,9 @@ a new ADR that says so, and the original stays.
 |---|---|---|---|
 | [ADR-0001](ADR-0001-repository-structure.md) | Repository structure and deferred implementation tree | Accepted | 2026-09-09 |
 | [ADR-0002](ADR-0002-independence-from-aura.md) | RADIUS is independent of AURA | Accepted | 2026-09-09 |
+| [ADR-0003](ADR-0003-frames-and-conventions.md) | Reference frames, notation and sign conventions | Accepted | 2026-09-09 |
+| [ADR-0004](ADR-0004-attitude-representation.md) | Quaternion as the internal attitude representation | Accepted | 2026-09-09 |
+| [ADR-0005](ADR-0005-state-vector.md) | State vector definition | Accepted | 2026-09-09 |
+| [ADR-0006](ADR-0006-numerical-integration.md) | Fixed-step RK4 as the initial integrator | Accepted | 2026-09-09 |
 | [ADR-0007](ADR-0007-licensing-deferred.md) | No licence at this stage | Accepted | 2026-09-09 |
 | [ADR-0008](ADR-0008-publication-architecture.md) | Publication architecture and data governance | Accepted | 2026-09-09 |
-
-ADR-0003 to ADR-0006 are reserved for the mathematical decisions of the research phase (frames and
-conventions, attitude representation, state vector, integrator) and are written when that research
-concludes, not before.

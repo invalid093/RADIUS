@@ -87,11 +87,16 @@ See `docs/architecture/AURA_INTERFACE.md`.
 
 | | |
 |---|---|
-| Researched | in progress — see `docs/research/` |
-| Designed | in progress — see `docs/architecture/` |
-| Implemented | **nothing** |
-| Verified | **nothing** |
-| Validated | **nothing** |
+| Researched | frames, attitude, state, equations of motion, numerical integration, atmosphere, aerodynamics, variable mass — `docs/research/` |
+| Designed | software architecture, provenance, publication governance, conceptual AURA interface |
+| Implemented | **nothing** — no source code exists |
+| Verified | **nothing** — ~60 tests are *specified*; none written |
+| Validated | **nothing**, and no path to validation currently exists |
+
+The specification passes its own [quality gate](docs/research/QUALITY_GATE.md) for Phases 2–6
+(frames through analytical verification) and **does not pass** for Phase 8 (aerodynamics): there is no
+traceable source for a coefficient set, so implementing it would produce results scoped to a
+hypothetical vehicle. That gap is recorded rather than worked around.
 
 Explicitly:
 
@@ -118,10 +123,15 @@ RADIUS/
 │   └── decisions/       ADRs — decisions with rationale, alternatives, and revisit criteria
 ├── infrastructure/
 │   └── publication_checklist.md   pre-push audit
-└── research/
-    ├── SOURCES.md       reference record: what each source is used for
-    └── RESEARCH_LOG.md  dated decision log
+├── research/
+│   ├── SOURCES.md       reference record: what each source is used for
+│   └── RESEARCH_LOG.md  dated decision log
+└── handoffs/
+    └── current_state.md concise project state for continuation
 ```
+
+**Start here:** [`docs/research/README.md`](docs/research/README.md) — the mathematical specification
+and its quality-gate verdict.
 
 Implementation directories (`radius/`, `experiments/`, `validation/`, `tests/`, `results/`,
 `handoffs/`) are **not created yet**. They arrive with the phase that fills them, so that the tree

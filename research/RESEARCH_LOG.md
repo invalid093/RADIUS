@@ -123,3 +123,162 @@ published, V-NUM-03 (bitwise determinism from config + seed) is what makes their
 documented purpose — an instance of that principle, not an exception to it.
 
 **NEXT STEP.** Resume the mathematical specification (RS-002 onward) under these rules.
+
+---
+
+## 2026-09-09 · RL-0006 — Conventions fixed before any equation is written
+
+**DECISION.** NED with $z$ **down**; all frames right-handed; passive transformations with subscripts
+reading "to ← from"; Euler 3-2-1; **Hamilton product, scalar-first quaternion** $q_{BI}$; SI and
+radians internally with degrees only at boundaries; moments about the instantaneous centre of mass
+unless a reference point is named. Fixed in one authoritative document.
+
+**RATIONALE.** Most 6-DOF defects are not errors of physics but two modules disagreeing about what a
+symbol means. Such an error is invisible to internal consistency checks, because a *uniformly applied*
+wrong convention is self-consistent. It follows that hand-computed expected values are the only test
+class that can catch it — which is why V-FRM-08 and V-ATT-01 are mandatory rather than optional.
+
+**EVIDENCE.** ADR-0003; SRC-005 (Shuster) documents the competing quaternion conventions that make
+this necessary. The quaternion-to-DCM formula was checked symbolically against a pure-yaw rotation
+during specification (`CALCULATION`).
+
+**IMPACT.** Changing any convention later invalidates every verification test and every stored
+reference trajectory, and requires a superseding ADR naming the invalidated data.
+
+**NEXT STEP.** Frames and mathematical utilities (Phase 2).
+
+---
+
+## 2026-09-09 · RL-0007 — Flat non-rotating Earth accepted, and quantified rather than asserted
+
+**DECISION.** The NED frame is treated as inertial for Phases 1–10, with a provisional validity domain
+of roughly 10 km range and 60 s duration. Gravity varies inverse-square with altitude from the start;
+constant $g$ is retained only as a switch enabling closed-form verification.
+
+**RATIONALE.** The verification programme rests on comparing against closed-form analytical solutions,
+and those exist for constant gravity in a non-rotating frame but not once the frame rotates. Starting
+flat establishes that the integrator and the rigid-body equations are correct *before* introducing
+effects that make correctness unfalsifiable by hand.
+
+**EVIDENCE.** RS-001 §3 (`CALCULATION`, 2026-09-09): neglected Coriolis acceleration $\le 2\Omega_E V$
+gives ~730 m over 100 s at 1000 m·s⁻¹; curvature drop $d^2/2R_E$ is 196 m at 50 km range; gravity is
+0.94 % low at 30 km if held constant. These are estimates of neglected terms, **not measured errors** —
+measuring them would need a rotating-Earth implementation, which does not exist.
+
+**IMPACT.** The validity domain must be quoted with every result until an ECEF/ECI extension exists.
+Because the altitude correction is cheap and exact, holding $g$ constant was rejected as a default.
+
+**NEXT STEP.** ECEF extension deferred; the gravity interface takes a position, not an altitude, so
+the extension is a substitution rather than a rewrite.
+
+---
+
+## 2026-09-09 · RL-0008 — Quaternion attitude; Euler ruled out at the initial condition
+
+**DECISION.** Quaternion as the integrated attitude state; DCM computed on demand and never stored;
+Euler angles at input/output only. Norm maintained by post-step renormalisation, explicitly **not**
+inside RK stages.
+
+**RATIONALE.** The general arguments for quaternions are well known and were not decisive on their
+own. What was decisive is RADIUS-specific: in a 3-2-1 sequence the Euler singularity is at
+$\theta=\pm90°$, which for an aircraft is an aerobatic edge case but for a **vertically launched
+vehicle is the initial condition of the most obvious test case the project will run**. Choosing a
+different sequence moves the singularity rather than removing it, and makes the representation's
+validity a function of the trajectory.
+
+Normalising *inside* an RK stage would change the stage function from the $f$ the Butcher tableau's
+order conditions were derived for, silently invalidating the method's order — a plausible trajectory
+with the wrong convergence rate. Recorded so it is not done.
+
+**EVIDENCE.** ADR-0004, RS-002. The claim that post-step normalisation preserves fourth order is
+argued in RS-002 §6 and registered as `A-ATT-01` — a **prediction to be tested by V-NUM-07**, not a
+result.
+
+**IMPACT.** No singularity at any attitude. Branch-free, division-free kinematics, which supports the
+determinism guarantee. Double cover forces geodesic-angle comparison rather than component-wise
+differences.
+
+**NEXT STEP.** Phase 3.
+
+---
+
+## 2026-09-09 · RL-0009 — Inertial velocity chosen over the body-axis convention
+
+**DECISION.** The 14-element state integrates **inertial** velocity, against the aerospace convention
+of body-axis $(u,v,w)$. Mass is an integrated state, not a prescribed function of time.
+
+**RATIONALE.** Three reasons, the second decisive. The translational equation loses its transport term
+$-\boldsymbol\omega\times\mathbf{v}$, whose sign error would be small and plausible rather than
+obvious. **Verification localises**: free-fall and ballistic references are exact and
+attitude-independent in inertial velocity, whereas in body axes the same physical test must be
+expressed through the attitude history, coupling the translational test to the rotational
+implementation — so a failure no longer says which is broken. And the variable-mass momentum-flux term
+separates cleanly from frame-rotation terms, which is a known failure mode in variable-mass
+derivations.
+
+The conventional choice's advantage is smaller than it appears: $\alpha,\beta$ need air-relative body
+velocity, so the transformation is evaluated every derivative call either way.
+
+**EVIDENCE.** ADR-0005, RS-003 §3. `INTERPRETATION` — an argued design choice, not a measured result.
+
+**IMPACT.** $u,v,w$ must be computed for aerodynamics and for comparison with literature. The two
+formulations are analytically equivalent, so switching later invalidates no physics — only regenerable
+reference trajectories.
+
+**NEXT STEP.** Phases 3–4.
+
+---
+
+## 2026-09-09 · RL-0010 — Fixed-step RK4; adaptive stepping deferred on determinism grounds
+
+**DECISION.** Fixed-step classical RK4, with explicit Euler retained as a verification comparator.
+Dormand–Prince RK5(4) evaluated and deferred with a stated revisit condition. Events located by
+bisection with restart.
+
+**RATIONALE.** Requirements were ranked before methods were considered, and determinism was placed
+above efficiency. This is not fastidiousness: the publication policy declines to publish Monte Carlo
+ensembles *because they are regenerable*, which is true only if regeneration is exact. Adaptive
+stepping makes the step sequence depend on a floating-point comparison against a tolerance, so a
+last-bit difference can flip an accept/reject decision and the runs diverge. It also makes order of
+accuracy — the most informative verification test available — much harder to measure, because $h$
+stops being an input.
+
+Euler is kept precisely because its expected slope is *different*: if RK4 and Euler both measured 4,
+the harness would be measuring something other than the integrator.
+
+**EVIDENCE.** ADR-0006, RS-005. SRC-009 for the rejected method. `CALCULATION`: for a 5 Hz mode,
+stability permits $h<90$ ms while a 20-steps-per-period accuracy rule demands $\le10$ ms — a factor of
+nine, which is why the stability bound is never the step-selection criterion.
+
+**IMPACT.** V-NUM-03 (determinism) becomes load-bearing for ADR-0008: if it fails, the argument for
+not publishing ensembles fails with it. The proposed $h=10^{-3}$ s is a **proposal, not a result**.
+
+**NEXT STEP.** Phase 5, then the analytical verification cases.
+
+---
+
+## 2026-09-09 · RL-0011 — Quality gate: PASS for Phases 2–6, NOT PASS for aerodynamics
+
+**DECISION.** The thirteen-question specification gate was evaluated. Phases 2–6 (frames, math, state,
+equations of motion, integration, analytical verification) **pass** and implementation may begin.
+Phase 8 (aerodynamics) **does not pass**. Phase 7 (atmosphere) passes conditional on checking the
+layer table against SRC-008.
+
+**RATIONALE.** Question 8 — how forces and moments are represented — is only partially answered. There
+is **no traceable source for an aerodynamic coefficient set**, so every aerodynamic result would be
+scoped to "a hypothetical vehicle with the stated coefficients"; and the initial model has no Mach
+dependence, which may make it invalid across most of a typical trajectory. Per the gate rule, the
+correct action is to continue researching that subsystem rather than implement it and discover the
+problem afterwards.
+
+**EVIDENCE.** `docs/research/QUALITY_GATE.md`. Three quantities are recorded as **unbounded**: jet
+damping (`A-VM-03`), CM-motion momentum (`A-VM-02`), and the flat-Earth validity bound (an estimate of
+neglected terms, not a measurement).
+
+**IMPACT.** Implementation proceeds through Phase 6. No aerodynamic claim will be supportable until
+the coefficient-provenance gap closes, and no rotational-damping claim is supportable at all while jet
+damping is unbounded.
+
+**NEXT STEP.** Phase 2 — `radius/math/` and `radius/frames/` with their verification tests, starting
+with the hand-computed convention tests V-FRM-08 and V-ATT-01. In parallel, search for a published
+generic aerodynamic coefficient set and for an independent 6-DOF benchmark trajectory.
