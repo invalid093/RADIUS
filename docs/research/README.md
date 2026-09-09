@@ -17,11 +17,21 @@ Read in order; each document depends on the ones above it.
 | [RS-007](RS-007_aerodynamic_model.md) | Force/moment build-up, moment transfer, validity gate, coefficient provenance | — |
 | [RS-008](RS-008_variable_mass_abstraction.md) | Generic mass-flow and external-force abstraction | — |
 | [**QUALITY_GATE**](QUALITY_GATE.md) | The thirteen questions the specification must answer, and the verdict | — |
+| [**PRE_IMPLEMENTATION_MATHEMATICAL_AUDIT**](PRE_IMPLEMENTATION_MATHEMATICAL_AUDIT.md) | Independent mathematical audit of the whole specification. **Four defects found and corrected**, one load-bearing | ADR-0009 |
 
-Supporting: [`../assumptions.md`](../assumptions.md) (28 registered assumptions with consequences) ·
+Supporting: [`../assumptions.md`](../assumptions.md) (31 registered assumptions with consequences) ·
 [`../architecture/ARCHITECTURE.md`](../architecture/ARCHITECTURE.md) ·
 [`../methodology/VERIFICATION_AND_VALIDATION.md`](../methodology/VERIFICATION_AND_VALIDATION.md) ·
 [`../../research/SOURCES.md`](../../research/SOURCES.md).
+
+## Audit status
+
+The specification was independently audited before implementation
+([report](PRE_IMPLEMENTATION_MATHEMATICAL_AUDIT.md), 2026-09-09): **PASS WITH REQUIRED CORRECTIONS**,
+corrections applied. The frame conventions, quaternion kinematics, translational dynamics, gyroscopic
+term and atmosphere model were **verified correct** by independent derivation and numerical check.
+Four defects were found — the load-bearing one a factor-of-two error in the variable-mass rotational
+equation (ADR-0009).
 
 ## Gate verdict
 

@@ -86,6 +86,11 @@ J·kmol⁻¹K⁻¹, $M_0 = 28.9644$ kg·kmol⁻¹, $\gamma = 1.40$.
 
 ### 3.3 Layer table
 
+**Unit trap (audit finding F-6).** The table below lists $L_b$ in **K·km⁻¹**, the form in which it
+is published. The barometric formulas of §3.2 require **K·m⁻¹**. The conversion is a factor of
+$10^{-3}$ applied at load time, in a named function — a missed conversion puts a factor of 1000 in an
+exponent and makes $p$ wrong by many orders of magnitude.
+
 | $b$ | $H_b$ (km) | $T_b$ (K) | $L_b$ (K·km⁻¹) |
 |---|---|---|---|
 | 0 | 0 | 288.15 | −6.5 |
@@ -150,11 +155,17 @@ produce plausible numbers, which converts an obvious failure into a subtle one.
 | V-ATM-01 | Sea-level values: $\rho = 1.225$ kg·m⁻³, $a = 340.29$ m·s⁻¹, $p = 101325$ Pa, $T = 288.15$ K | relative error $<10^{-5}$ |
 | V-ATM-02 | **Continuity at every layer boundary**: $T$, $p$, $\rho$ evaluated from below and above | relative discontinuity $<10^{-12}$ |
 | V-ATM-03 | Comparison against the SRC-008 published table at a set of altitudes spanning all layers | relative error $<10^{-4}$ (tolerance covers table rounding) |
+| **V-ATM-09** | Lapse-rate unit conversion: the K·km⁻¹ table value reaches the formula as K·m⁻¹ | exponent for the troposphere $=-5.2559$ |
 | V-ATM-04 | Geopotential/geometric conversion round trip | $<10^{-9}$ relative |
 | V-ATM-05 | Monotonicity: $p$ and $\rho$ strictly decrease with altitude throughout the domain | no violation |
 | V-ATM-06 | Out-of-domain altitude raises; does not clamp or extrapolate | exception raised |
 | V-ATM-07 | Hydrostatic consistency: $dp/dH \approx -\rho g_0$ by finite difference | relative error $<10^{-4}$ |
 | V-ATM-08 | Exponential model reproduces $\rho_0$ at $h=0$ and the correct scale height | analytic |
+
+**Partially verified during the pre-implementation audit** (`CALCULATION`, 2026-09-09), against the
+published values: sea-level $\rho = 1.22500$ kg·m⁻³ ✓, $a = 340.294$ m·s⁻¹ ✓; at 11 km geopotential
+$T = 216.65$ K ✓ and $p = 22632.1$ Pa against a published 22632 ✓; troposphere exponent $-5.2559$ ✓.
+The formulation and constants are correct. The remaining layers are still unchecked (`A-ATM-01`).
 
 **V-ATM-03 is the one that matters.** It is a comparison against an external published document, and
 it is the only check here that could fail because RADIUS misunderstood the standard rather than
@@ -184,6 +195,10 @@ and the wrong purpose.
 2. Does the flat-Earth validity domain (RS-001 §4, ~10 km range) make altitudes above ~30 km
    unreachable in practice, given the geometry? If so, implementing layers 4–6 is speculative work.
    Cheap enough to keep, but it should not be described as capability the project can use.
+2b. **Dynamic viscosity $\mu$ is absent from the interface.** Not needed by the current aerodynamic
+   model (no Reynolds dependence), but any future coefficient set with Reynolds-number dependence
+   requires it. Sutherland's law is in the same defining document. Not added now — an unused quantity
+   is one more thing to verify — and the return is a structure, so adding it is non-breaking.
 3. Is a scale height of 8500 m the right choice for the exponential baseline, or should it be fitted
    to match the layered model over the altitude band of interest? A fitted value would make
    comparisons between the two models more informative.

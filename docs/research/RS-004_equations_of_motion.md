@@ -111,37 +111,88 @@ naturally inertial and is added directly. One transformation per derivative eval
 
 ## 4. Rotational dynamics
 
+> **Corrected 2026-09-09 (audit finding F-1).** This section previously carried a
+> $-\dot{\mathbf{J}}\boldsymbol{\omega}$ term. That term is **wrong for mass ejection** — it models
+> internal redistribution — and produced a factor-of-two spurious spin-up in a torque-free depleting
+> body. The derivation below replaces it. See
+> `PRE_IMPLEMENTATION_MATHEMATICAL_AUDIT.md` §5 and ADR-0009.
+
 Angular momentum about the centre of mass, resolved in $B$: $\mathbf{h}^{B} = \mathbf{J}\boldsymbol{\omega}$.
 
-Differentiating in the inertial frame and applying the transport theorem
-(`NOTATION_AND_CONVENTIONS.md` §2):
+### 4.1 Why the constant-mass form is not simply reusable — the rotational case
 
-$$\left.\frac{d\mathbf{h}}{dt}\right|_{I} = \dot{\mathbf{J}}\boldsymbol{\omega} + \mathbf{J}\dot{\boldsymbol{\omega}} + \boldsymbol{\omega}\times(\mathbf{J}\boldsymbol{\omega}) = \mathbf{M}^{B}$$
+The same open/closed-system care that §3.1 applies to linear momentum is required for angular
+momentum, and the naive extension fails in the same way.
 
-so
+Differentiating $\mathbf{h}$ in the inertial frame and applying the transport theorem gives the
+left-hand side
 
-$$\boxed{\;\dot{\boldsymbol{\omega}} = \mathbf{J}^{-1}\Big[\mathbf{M}^{B}_{\text{aero}} + \mathbf{M}^{B}_{\text{prop}} - \boldsymbol{\omega}\times(\mathbf{J}\boldsymbol{\omega}) - \dot{\mathbf{J}}\boldsymbol{\omega} + \mathbf{M}^{B}_{\text{jet}}\Big]\;}$$
+$$\left.\frac{d\mathbf{h}}{dt}\right|_{I} = \dot{\mathbf{J}}\boldsymbol{\omega} + \mathbf{J}\dot{\boldsymbol{\omega}} + \boldsymbol{\omega}\times(\mathbf{J}\boldsymbol{\omega})$$
 
-Term by term:
+Setting this equal to $\mathbf{M}_{\text{ext}}$ alone is the **rotational analogue of the
+$\frac{d}{dt}(m\mathbf{v})=\mathbf{F}$ error rejected in §3.1**: it treats the departing mass as
+vanishing, when in fact it leaves carrying angular momentum.
+
+The right-hand side must therefore include the angular-momentum flux. Let mass leave **co-rotating,
+with negligible velocity relative to the structure at its exit location** (`A-VM-05`). The angular
+momentum it carries out per unit time, about the CM, is
+
+$$\int \mathbf{r}\times(\boldsymbol{\omega}\times\mathbf{r})\,d\dot{m} \;=\; -\dot{\mathbf{J}}\boldsymbol{\omega}$$
+
+so the balance reads
+
+$$\dot{\mathbf{J}}\boldsymbol{\omega} + \mathbf{J}\dot{\boldsymbol{\omega}} + \boldsymbol{\omega}\times(\mathbf{J}\boldsymbol{\omega}) \;=\; \mathbf{M}_{\text{ext}} + \dot{\mathbf{J}}\boldsymbol{\omega}$$
+
+**The $\dot{\mathbf{J}}\boldsymbol{\omega}$ terms cancel exactly**, leaving
+
+$$\boxed{\;\dot{\boldsymbol{\omega}} = \mathbf{J}(t)^{-1}\Big[\mathbf{M}^{B}_{\text{aero}} + \mathbf{M}^{B}_{\text{prop}} - \boldsymbol{\omega}\times\big(\mathbf{J}(t)\boldsymbol{\omega}\big)\Big]\;}$$
+
+The inertia tensor is evaluated at the instantaneous mass; its *rate* does not appear.
+
+### 4.2 Why this is not merely a simplification
+
+`CALCULATION` (pre-implementation audit, 2026-09-09). Torque-free axisymmetric body spinning at
+$\omega_z = 10$ rad·s⁻¹ about its symmetry axis, depleting uniformly 1000 → 500 kg over 20 s with
+inertia proportional to mass:
+
+| | $\omega_z(20\ \text{s})$ |
+|---|---|
+| Truth — each element leaves carrying its own angular momentum | **10.000** rad·s⁻¹ |
+| Previous formulation, retaining $-\dot{\mathbf{J}}\boldsymbol{\omega}$ | **20.000** rad·s⁻¹ |
+
+Retaining the term forces conservation of $\mathbf{J}\boldsymbol{\omega}$ — the physics of a skater
+pulling their arms in. That is **internal redistribution**, not ejection. When mass is ejected, every
+material element keeps its own angular velocity, so the remaining body spins at the same rate with
+less angular momentum.
+
+`INTERPRETATION`: $-\dot{\mathbf{J}}\boldsymbol{\omega}$ **is** correct for redistribution
+($\dot{\mathbf{J}}\neq0$ with $\dot m = 0$ — a moving internal mass). RADIUS does not model that. If
+it ever does, the term returns, with its own derivation.
+
+### 4.3 Term by term
 
 | Term | Physical meaning | Status in RADIUS |
 |---|---|---|
 | $\mathbf{M}_{\text{aero}}$ | aerodynamic moment about the CM | **Implemented** (RS-007) |
 | $\mathbf{M}_{\text{prop}}$ | moment from a thrust line not through the CM | **Implemented** via interface (RS-008) |
-| $-\boldsymbol{\omega}\times(\mathbf{J}\boldsymbol{\omega})$ | gyroscopic coupling. Source of coning and of intermediate-axis instability | **Implemented** |
-| $-\dot{\mathbf{J}}\boldsymbol{\omega}$ | moment from the inertia tensor changing as mass depletes | **Implemented** — $\dot{\mathbf{J}}$ from the mass model, by finite difference or analytically (RS-008 §4) |
-| $\mathbf{M}_{\text{jet}}$ | **jet damping**: the expelled mass carries away angular momentum, opposing transverse rotation | **OMITTED.** Registered as `A-VM-03` |
+| $-\boldsymbol{\omega}\times(\mathbf{J}\boldsymbol{\omega})$ | gyroscopic coupling. Source of coning and of intermediate-axis instability | **Implemented.** Audit-verified conservative: $\lVert\mathbf{h}\rVert$ drift $5\times10^{-16}$, energy drift $2\times10^{-14}$ over 8 s |
+| angular-momentum flux of ejected mass | cancels $\dot{\mathbf{J}}\boldsymbol{\omega}$ under `A-VM-05` | **Accounted for analytically** — which is why neither term appears |
+| **jet damping** | arises only when the exhaust leaves with **non-zero** velocity relative to the structure, at a point offset from the CM. Opposes transverse rotation | **OMITTED.** `A-VM-03` |
 
-**On the omission.** Jet damping is a genuine physical moment, roughly proportional to the mass flow
-rate and the square of the distance from the CM to the exit plane, opposing transverse angular rate —
-i.e. it acts as a **damping** term. Omitting it makes the simulated vehicle *less* damped in pitch and
-yaw than a real one: attitude oscillations decay more slowly, or fail to decay. This is the
-conservative direction for a stability study and the non-conservative direction for a dispersion
-study, and any result touching either must say so.
+### 4.4 On the omission of jet damping
 
-`LIMITATION`: the magnitude of the omitted term is currently **unbounded** — RADIUS does not know how
-large the error is. Closing this needs a reference (see `research/SOURCES.md`, gaps table). Until
-then no claim about rotational damping is supportable.
+It is now a genuinely separate term rather than half of an entangled pair — the second benefit of the
+correction. Physically it is roughly proportional to the mass-flow rate and to the square of the
+distance from the CM to the exit plane, opposing transverse angular rate, i.e. it **damps**.
+
+Omitting it makes the simulated vehicle *less* damped in pitch and yaw than a real one: attitude
+oscillations decay more slowly, or fail to decay. That is the conservative direction for a stability
+study and the non-conservative direction for a dispersion study, and any result touching either must
+say so.
+
+`LIMITATION`: the magnitude of the omitted term remains **unbounded** — RADIUS does not know how
+large the error is. Closing this needs a reference (`research/SOURCES.md`, gaps table). Until then no
+claim about rotational damping is supportable.
 
 **$\mathbf{J}$ is a full symmetric tensor**, not assumed diagonal. Assuming principal axes would
 impose a symmetry the vehicle may not have, and the products of inertia are exactly what couple the
@@ -180,7 +231,13 @@ terms so that a failure localises. Ordered so that each test's prerequisites are
 | V-EOM-05 | Torque-free asymmetric | $J_x < J_y < J_z$, all distinct | no closed form; **invariants** $\lVert\mathbf{h}\rVert$ and $T=\frac{1}{2}\boldsymbol{\omega}\!\cdot\!\mathbf{J}\boldsymbol{\omega}$ conserved. Qualitatively: intermediate-axis instability | products of inertia, full tensor handling |
 | V-EOM-06 | **Tsiolkovsky** | straight line, no gravity, no aero, constant $\mathbf{c}$ and $\dot m$ | $\Delta v = \lVert\mathbf{c}\rVert \ln\!\big(m_0/m_f\big)$, exact | **the variable-mass coupling**, quantitatively |
 | V-EOM-07 | Thrust offset from CM | $\mathbf{M}_{\text{prop}} = \mathbf{r}\times\mathbf{F}_{\text{prop}}$ | angular acceleration $= \mathbf{J}^{-1}\mathbf{M}$ at $t=0$ | moment transfer, CM referencing |
+| **V-EOM-09** | **Variable-mass torque-free spin** | axisymmetric, uniform depletion, $\mathbf{M}=0$, $\boldsymbol{\omega}_0$ on the symmetry axis | $\omega_z$ **constant** (hand-computed) | **the variable-mass rotational equation.** Added by the audit |
 | V-EOM-08 | Dimensional consistency | symbolic audit of every term | every term in $\dot{\mathbf{v}}$ is m·s⁻², every term in $\dot{\boldsymbol{\omega}}$ is rad·s⁻² | unit errors |
+
+**V-EOM-09 exists because of a gate failure.** Every rotational test in the original suite ran at
+constant mass, so the variable-mass rotational equation was exercised by nothing at all — which is how
+a factor-of-two error passed a quality gate marked PASS. The generalisable lesson is that a suite must
+be checked for *coverage of the equations as written*, not only for the correctness of each test.
 
 **V-EOM-06 is the important one.** It is the only test that checks the variable-mass translational
 coupling against an exact analytical result, and it does so with a formula independent of the
@@ -201,7 +258,7 @@ how a physical vehicle would behave. See `docs/methodology/VERIFICATION_AND_VALI
 
 ## 8. Assumptions registered
 
-`A-EOM-01` … `A-EOM-04`, `A-VM-01`, `A-VM-03` — see `docs/assumptions.md`.
+`A-EOM-01` … `A-EOM-04`, `A-VM-01`, `A-VM-03`, `A-VM-05` — see `docs/assumptions.md`.
 
 ---
 
@@ -209,11 +266,12 @@ how a physical vehicle would behave. See `docs/methodology/VERIFICATION_AND_VALI
 
 1. **How large is the omitted jet-damping term?** Currently unbounded (§4). This is the largest known
    gap in the formulation and it blocks any rotational-damping claim.
-2. Should $\dot{\mathbf{J}}$ be computed analytically from the mass model or by finite difference?
-   Finite difference is simpler and introduces a truncation error into a term that is already small;
-   analytical is exact but couples the dynamics module to the mass model's internals. Deferred to
-   RS-008 §4, with the note that a finite-difference $\dot{\mathbf{J}}$ inside an RK stage is a
-   second, hidden discretisation and needs its own error assessment.
+2. ~~Should $\dot{\mathbf{J}}$ be computed analytically or by finite difference?~~ **Closed by the
+   F-1 correction (2026-09-09):** $\dot{\mathbf{J}}$ no longer appears in the equations of motion, so
+   the associated hazard — a finite-difference derivative nested inside an RK stage acting as a
+   second, hidden discretisation — disappears with it. $\dot{\mathbf{J}}$ remains available as a
+   diagnostic. A correction that removes both an error and a hazard is evidence it was the right
+   correction.
 3. Is the rigid-body assumption (`A-EOM-01`) tenable for a slender vehicle at high dynamic pressure?
    Almost certainly not in general. It is accepted as a scope boundary, not defended as physics.
 4. RS-003 §3 chose inertial velocity partly to keep the variable-mass terms separable. That reasoning

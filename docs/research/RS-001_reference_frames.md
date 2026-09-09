@@ -66,11 +66,22 @@ centre of mass, but the geometry that generates aerodynamic forces is fixed to t
 
 Related to $B$ through angle of attack $\alpha$ and sideslip $\beta$:
 
-$$\mathbf{T}_{BW} = \mathbf{R}_y(-\alpha)\,\mathbf{R}_z(\beta)\qquad\text{(sign convention fixed in RS-007 §2 and tested by V-FRM-05)}$$
+$$\mathbf{T}_{BW} = \mathbf{R}_y(\alpha)\,\mathbf{R}_z(-\beta)\qquad\text{(sign convention fixed in RS-007 §2 and tested by V-FRM-05)}$$
 
 with, from $\mathbf{v}^{B}_{\text{rel}} = (u, v, w)$:
 
-$$\alpha = \arctan\!\left(\frac{w}{u}\right), \qquad \beta = \arcsin\!\left(\frac{v}{V}\right), \qquad V = \lVert\mathbf{v}_{\text{rel}}\rVert$$
+$$\alpha = \arctan2(w,\,u), \qquad \beta = \arcsin\!\left(\frac{v}{V}\right), \qquad V = \lVert\mathbf{v}_{\text{rel}}\rVert$$
+
+equivalently $\mathbf{v}^{B}_{\text{rel}} = V\big(\cos\alpha\cos\beta,\;\sin\beta,\;\sin\alpha\cos\beta\big)$,
+which is what fixes the composition above.
+
+> **Corrected 2026-09-09 (audit finding F-2).** This document previously stated
+> $\mathbf{T}_{BW} = \mathbf{R}_y(-\alpha)\mathbf{R}_z(\beta)$, which is sign-inconsistent with the
+> definitions of $\alpha$ and $\beta$ immediately above: for $\alpha=0,\ \beta=+30°,\ V=100$ it
+> returns $\mathbf{v}^{B} = (86.603,\,-50,\,0)$, i.e. $\beta=-30°$. Both the sideslip and
+> angle-of-attack senses were inverted, which would have reversed every side force and yawing moment.
+> `arctan` was also corrected to `arctan2` for consistency with RS-007 §2 (finding F-5). See
+> `PRE_IMPLEMENTATION_MATHEMATICAL_AUDIT.md` §9.1.
 
 **Degenerate at $V = 0$**, and ill-conditioned for small $V$. Handling is specified in RS-007 §5;
 it is not left to the implementer.
@@ -121,6 +132,13 @@ $\Omega_E^2 R_E \approx 3.4\times10^{-2}$ m·s⁻². This term is conventionally
 gravity: if $g$ is taken as the locally measured value rather than a Newtonian point-mass value, the
 centrifugal term is already in it. RADIUS does this, and records it as `A-FRM-02` so that anyone
 later adding an explicit centrifugal term knows not to double-count it.
+
+`LIMITATION` (audit finding F-7, 2026-09-09). This interacts with §3.4: the centrifugal contribution
+buried inside measured $g$ scales as $(R_E+h)$ — it *increases* with altitude — whereas §3.4 scales
+the whole of $g$ as inverse-square. `CALCULATION`: the mis-scaling is $\approx5\times10^{-4}$ m·s⁻²
+at 30 km ($5\times10^{-5}$ of $g$), about 0.9 m over 60 s of free fall — three orders of magnitude
+below the accepted Coriolis error of §3.1. **Recorded, not corrected.** Separating $g$ into
+gravitational and centrifugal parts is work that belongs with the ECEF extension.
 
 ### 3.3 Earth curvature
 
@@ -192,10 +210,17 @@ produces $\mathbf{T}_{BI}$, and it takes the quaternion; no other route to it ex
 | V-FRM-06 | Composition: $\mathbf{T}_{WI} = \mathbf{T}_{WB}\mathbf{T}_{BI}$ agrees with direct construction | $< 10^{-12}$ |
 | V-FRM-07 | Euler → quaternion → DCM → Euler round trip over a grid avoiding $\lvert\theta\rvert>89°$ | angle error $< 10^{-10}$ rad |
 | V-FRM-08 | Known-value spot checks: 90° yaw maps $\hat{x}_I \to -\hat{y}_B$ (hand-computed, hard-coded) | exact to $10^{-15}$ |
+| **V-FRM-09** | $\mathbf{T}_{BI}(kq)$ for $k \neq 1$ is orthonormal and equals $\mathbf{T}_{BI}(q)$ — the non-unit quaternions that necessarily arise inside RK stages | $<10^{-12}$ |
+| **V-FRM-10** | Composition order: $\mathbf{T}(q_a\otimes q_b) = \mathbf{T}(q_b)\mathbf{T}(q_a)$, **and** the reversed order demonstrably fails | equality $<10^{-12}$; reversed differs by $>10^{-3}$ |
 
 V-FRM-08 is the important one. The others check internal consistency, and a codebase can be
 self-consistently wrong. Only a hand-computed expected value catches a convention error that has been
 applied uniformly.
+
+That is not hypothetical. The wind-frame sign error corrected in §2.3 (audit finding F-2) would have
+round-tripped perfectly through V-FRM-05 had the builder and the extractor been written to agree with
+each other. V-FRM-09 and V-FRM-10 were added by the audit; both catch defects the original suite
+could not.
 
 ---
 

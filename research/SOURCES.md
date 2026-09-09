@@ -142,9 +142,11 @@ variable-mass system, and specifically the **additional terms that a naive const
 omits**: the momentum-flux (thrust) term, the Coriolis-like term, the jet-damping moment, and the
 moment arising from a time-varying inertia tensor.
 
-RADIUS uses this to *name the terms it is not implementing*. The Phase 4 baseline omits jet damping
-and inertia-rate moments; this source is what allows that omission to be registered as a specific,
-identified assumption (`A-VM-03`, `A-VM-04`) rather than an unexamined gap.
+RADIUS uses this to *name the terms it is not implementing*, and — after the pre-implementation
+audit — to establish that the inertia-rate term and the angular-momentum flux must be derived
+**together**. Under `A-VM-05` they cancel exactly, so the Phase 4 baseline carries neither
+(ADR-0009); jet damping remains omitted as a separate, defined term (`A-VM-03`). This source is what
+allows those to be specific, identified assumptions rather than unexamined gaps.
 
 **Scope note.** This source discusses design-relevant parameters (nozzle and chamber geometry,
 propellant grain configuration). RADIUS uses **only** the abstract equations of motion from it. The
@@ -271,6 +273,20 @@ undertaken, and claiming it would be false.
 **Note.** Revision B (2024) supersedes A. Cite B unless a claim depends on A specifically.
 
 ---
+
+## Convention reconciliation
+
+Recorded 2026-09-09 by the pre-implementation audit. A source is not usable merely because it contains
+a similar-looking equation; its frame convention, variable definitions, sign convention and
+assumptions must be compatible with RADIUS's, or the difference must be reconciled explicitly.
+
+| Source | Difference from RADIUS | Reconciliation |
+|---|---|---|
+| **SRC-006** Markley & Crassidis | Largely uses the **JPL/Shuster** quaternion convention, in which the product order is reversed relative to Hamilton. Their $\dot q$ therefore *looks* different from RADIUS's | RADIUS's $\dot q = \tfrac12 q\otimes(0,\boldsymbol\omega)$ is **derived independently** and confirmed numerically against a non-principal-axis case (audit §2.2). This source is cited for norm-drift behaviour and Euler singularity structure, which are convention-independent — **not** as the authority for the kinematic equation |
+| **SRC-003** NASA RP-1207 | Constant mass; integrates **body-axis** velocity $(u,v,w)$, where RADIUS integrates inertial velocity | Physically equivalent. Used to cross-check the **rotational** equation and the force/moment build-up, not the translational state form. Its constant-mass scope matches RADIUS's Phase-4 baseline exactly, which is what makes it a good audit reference |
+| **SRC-007** Eke | Variable-mass equations derived via Kane's method; includes design-relevant hardware discussion | Supports the ADR-0009 correction: the momentum-flux treatment is the relevant content. Hardware content is out of scope and not used |
+| **SRC-002** Zipfel | Tensor notation; different symbol set | Used for the resolution/differentiation discipline, not for equations copied verbatim |
+| **SRC-008** U.S. Std Atm 1976 | Lapse rates published in K·km⁻¹ | Converted explicitly to K·m⁻¹ at load time (audit finding F-6). Sea level and the 11 km boundary verified numerically against published values |
 
 ## Gaps — sources RADIUS needs and does not yet have
 

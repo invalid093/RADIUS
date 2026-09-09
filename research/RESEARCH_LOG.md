@@ -282,3 +282,58 @@ damping is unbounded.
 **NEXT STEP.** Phase 2 — `radius/math/` and `radius/frames/` with their verification tests, starting
 with the hand-computed convention tests V-FRM-08 and V-ATT-01. In parallel, search for a published
 generic aerodynamic coefficient set and for an independent 6-DOF benchmark trajectory.
+
+
+---
+
+## 2026-09-09 · RL-0012 — Pre-implementation mathematical audit: four defects, one load-bearing
+
+**DECISION.** Before writing any Phase 2 code, the whole specification was independently audited as a
+*candidate* rather than as settled. Verdict **PASS WITH REQUIRED CORRECTIONS**; corrections applied.
+The load-bearing one removes the $-\dot{\mathbf{J}}\boldsymbol{\omega}$ term from the rotational
+equation (ADR-0009).
+
+**RATIONALE.** The specification had already passed a quality gate, which is precisely why it needed
+an adversarial re-reading: a gate that has returned PASS is the least likely thing to be re-examined,
+and the earlier gate had checked that each answer *existed* rather than that the answers were
+*consistent with each other* and *covered by tests*.
+
+**EVIDENCE.** `docs/research/PRE_IMPLEMENTATION_MATHEMATICAL_AUDIT.md`. Numerical checks run as audit
+artifacts (`CALCULATION`, 2026-09-09):
+
+- **F-1 (load-bearing).** Torque-free axisymmetric body depleting 1000 → 500 kg: the specified
+  equation gives $\omega_z = 20.0$ rad·s⁻¹ where the truth is $10.0$. The
+  $-\dot{\mathbf{J}}\boldsymbol{\omega}$ term forces conservation of $\mathbf{J}\boldsymbol{\omega}$ —
+  a skater pulling their arms in — which is internal *redistribution*, not ejection. It is the exact
+  rotational analogue of the $\frac{d}{dt}(m\mathbf{v})=\mathbf{F}$ error that RS-004 §3.1 identifies
+  and rejects for translation, three sections earlier. Analytically, the angular-momentum flux of
+  co-rotating ejected mass is $-\dot{\mathbf{J}}\boldsymbol{\omega}$, so the two cancel exactly.
+- **F-2.** $\mathbf{T}_{BW}=\mathbf{R}_y(-\alpha)\mathbf{R}_z(\beta)$ contradicted RADIUS's own
+  $\alpha,\beta$ definitions: at $\beta=+30°$ it returns $\beta=-30°$. Corrected to
+  $\mathbf{R}_y(\alpha)\mathbf{R}_z(-\beta)$.
+- **F-3.** $\mathbf{T}_{BI}(q)$ was undefined at the non-unit quaternions RK stages necessarily
+  produce; $\mathbf{T}_{BI}(kq)=k^2\mathbf{T}_{BI}(q)$, so the raw formula scales every force by
+  $\lVert q\rVert^2$ inside stages 2–4. Fixed by dividing by $q\cdot q$.
+- **F-4.** Quaternion composition order is the **reverse** of matrix composition order
+  ($\mathbf{T}(q_a\otimes q_b)=\mathbf{T}(q_b)\mathbf{T}(q_a)$) and this was stated nowhere.
+
+**What survived.** Frame conventions, the quaternion kinematic equation (re-derived independently and
+confirmed against a **non-principal** axis, which separates the competing product orders by $10^{12}$
+where a principal-axis test cannot separate them at all), translational dynamics across four limiting
+cases, the gyroscopic term, and the atmosphere model against published values at sea level and 11 km.
+
+**IMPACT.** RS-001, RS-002, RS-003, RS-004, RS-005, RS-006, RS-008 and the notation document amended;
+`A-VM-05` and `A-NUM-05` registered; `A-VM-03` re-scoped; six tests added (V-EOM-09/V-VM-10,
+V-FRM-09, V-FRM-10, V-ATT-02b, V-NUM-09, V-ATM-09). A timestep-selection *methodology* replaces the
+bare proposal of $h=10^{-3}$ s. Two hazards disappeared with the removed term: the analytic-vs-finite-
+difference $\dot{\mathbf{J}}$ question, and the risk of a nested discretisation inside an RK stage.
+
+**The generalisable finding**, recorded because it will recur: *every rotational test in the original
+suite ran at constant mass*, so the variable-mass rotational equation was exercised by nothing. A test
+suite must be audited for **coverage of the equations as written**, not only for the correctness of
+each test. And an argument made well in one section does not propagate itself to the analogous case in
+another.
+
+**NEXT STEP.** Phase 2 — `radius/math/` and `radius/frames/`, beginning with the hand-computed
+convention tests. Q8 (aerodynamic coefficients) remains NOT PASS; the audit deliberately did not close
+it by inventing data.

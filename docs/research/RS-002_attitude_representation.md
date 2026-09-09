@@ -108,6 +108,14 @@ $$\boldsymbol{\Omega}(\boldsymbol{\omega}) =
 \end{bmatrix}
 = \begin{bmatrix} 0 & -\boldsymbol{\omega}^{\mathsf{T}} \\ \boldsymbol{\omega} & -[\boldsymbol{\omega}\times]\end{bmatrix}$$
 
+**Independently re-derived and confirmed in the pre-implementation audit (2026-09-09).** The
+derivation assumes $\dot q = \frac12 q\otimes\tilde{\boldsymbol\omega}$ and shows it implies
+$\dot{\mathbf{v}}^{B} = -\boldsymbol\omega\times\mathbf{v}^{B}$ for a constant inertial vector — the
+required behaviour. Numerically confirmed with a **non-principal** axis
+$\boldsymbol\omega=(0.37,-0.81,1.23)$ against $\exp(-[\boldsymbol\omega\times]t)$: error
+$7\times10^{-13}$, while the reversed product order errs by $3.6\times10^{-1}$. See
+`PRE_IMPLEMENTATION_MATHEMATICAL_AUDIT.md` §2.2.
+
 `CALCULATION` — derived during specification (2026-09-09) by expanding
 $\dot q = \frac{1}{2}(-\mathbf{q}_v\!\cdot\!\boldsymbol{\omega},\; q_0\boldsymbol{\omega} - [\boldsymbol{\omega}\times]\mathbf{q}_v)$
 and cross-checked on a constant-yaw-rate case. **This derivation is not the authority.** The
@@ -160,6 +168,12 @@ $O(h^{p+1})$ — the same order as the local truncation error, because the exact
 norm and the method's error is what departs from the exact flow. For RK4 with $h = 10^{-3}$ s this is
 negligible per step and accumulates slowly, but it accumulates monotonically over long runs and must
 be removed.
+
+**Prerequisite: $\mathbf{T}_{BI}$ must be defined off the unit sphere.** Inside an RK stage
+$\lVert q\rVert \neq 1$ necessarily. Since $\mathbf{T}_{BI}(kq)=k^2\mathbf{T}_{BI}(q)$, the raw
+formula is not a rotation there; RADIUS divides by $q\cdot q$
+(`NOTATION_AND_CONVENTIONS.md` §4, `A-NUM-05`, test V-FRM-09). This was missing from the original
+specification — audit finding F-3.
 
 **Method chosen: explicit renormalisation after each completed step.**
 
@@ -220,12 +234,20 @@ reporting layer must flag it rather than print two meaningless numbers.
 |---|---|---|
 | V-ATT-01 | Hand-computed conversions: 90° yaw, 90° pitch, 90° roll quaternions produce the expected DCMs, hard-coded | $<10^{-15}$ |
 | V-ATT-02 | Constant body rate $\boldsymbol{\omega} = (0,0,\omega)$ from identity: propagated $q(t)$ matches the closed-form $(\cos\frac{\omega t}{2},0,0,\sin\frac{\omega t}{2})$ | $\Delta\Theta < 10^{-9}$ rad over 10 s |
+| **V-ATT-02b** | **Non-principal axis, mandatory.** The same check with $\boldsymbol{\omega}$ not aligned to a body axis, against $\exp(-[\boldsymbol{\omega}\times]t)$ | $\Delta\Theta<10^{-9}$ rad. **Must fail by $>10^{-3}$ under the reversed product order** |
 | V-ATT-03 | Same, about each of the three body axes independently, and about a non-principal axis $(1,1,1)/\sqrt{3}$ | as above |
 | V-ATT-04 | Norm preservation: $\big\lvert\lVert q\rVert - 1\big\rvert$ bounded over a long run with normalisation on | $<10^{-12}$ throughout |
 | V-ATT-05 | Norm *drift* with normalisation **off** scales as $O(h^{p+1})$ per step | measured exponent within 0.2 of 5 |
 | V-ATT-06 | Double cover: $q$ and $-q$ give identical DCMs, and $\Delta\Theta(q,-q) = 0$ | exact / $<10^{-12}$ |
 | V-ATT-07 | Euler round trip over a grid excluding $\lvert\theta\rvert > 89°$; and correct flagging inside the excluded band | $<10^{-10}$ rad; flag raised |
 | V-ATT-08 | $\arccos$ guard: $\Delta\Theta$ returns 0, not `NaN`, for identical quaternions | no `NaN` |
+
+**V-ATT-02b is not optional and not redundant with V-ATT-02.** For a constant-axis rotation, $q$ and
+$\tilde{\boldsymbol\omega}$ commute, so a principal-axis test **cannot distinguish**
+$q\otimes\tilde{\boldsymbol\omega}$ from $\tilde{\boldsymbol\omega}\otimes q$ — the two most likely
+competing conventions. The audit needed a non-principal axis to separate them, and it separated them
+by twelve orders of magnitude. A test that cannot fail under the wrong convention is not testing the
+convention.
 
 V-ATT-05 is unusual and worth keeping: it verifies that the *unmaintained* system misbehaves in the
 predicted way. A test suite that only checks the corrected system cannot distinguish "normalisation

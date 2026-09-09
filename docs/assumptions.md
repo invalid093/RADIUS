@@ -15,6 +15,10 @@ deleted**, because results whose manifests list it must remain traceable (`docs/
 **Every assumption below is `OPEN` or `TO-VERIFY`.** Nothing is implemented, so nothing has been
 tested. `FACT`.
 
+**Revised 2026-09-09** by `docs/research/PRE_IMPLEMENTATION_MATHEMATICAL_AUDIT.md`: `A-VM-05` and
+`A-NUM-05` added; `A-VM-03` re-scoped after the rotational equation was corrected (ADR-0009);
+`A-FRM-02` extended with a quantified inconsistency.
+
 The **Consequence** column is the important one. An assumption without a stated consequence is
 decoration: it does not tell a reader what changes if it is wrong, which is the only reason to record
 it.
@@ -26,7 +30,7 @@ it.
 | ID | Assumption | Status | Consequence if wrong | Action |
 |---|---|---|---|---|
 | `A-FRM-01` | The NED frame at the reference point may be treated as **inertial**: Earth is flat and non-rotating | `OPEN` — **the most consequential assumption in RADIUS** | Coriolis and curvature errors enter every trajectory. Quantified in RS-001 §3: ~730 m over 100 s at 1000 m·s⁻¹; 196 m curvature drop at 50 km range | Validity domain (~10 km range, ~60 s) quoted with every result. Superseded by an ECEF/ECI extension, deferred |
-| `A-FRM-02` | The centrifugal contribution is **already inside** the measured $g$ used | `OPEN` | Double-counting if a later change adds an explicit centrifugal term | Stated in RS-001 §3.2 so the ECEF extension does not add it twice |
+| `A-FRM-02` | The centrifugal contribution is **already inside** the measured $g$ used | `OPEN` | Double-counting if a later change adds an explicit centrifugal term. **Audit finding F-7:** the centrifugal part scales as $(R_E+h)$ but `A-FRM-03`'s $g(h)$ scales all of $g$ as inverse-square. `CALCULATION`: $\approx5\times10^{-4}$ m·s⁻² at 30 km, ~0.9 m over 60 s — three orders below the accepted Coriolis error | Recorded, **not corrected**. Splitting $g$ belongs with the ECEF extension |
 | `A-FRM-03` | Constant $g$ is used **only** as a deliberate switch enabling closed-form verification, not as a physical claim | `OPEN` (by construction) | If a *result* were produced with constant $g$ enabled, it would carry an unstated altitude error — 0.94 % at 30 km | Configuration flag recorded in every manifest |
 | `A-FRM-04` | The convention set (NED $z$-down, right-handed, 3-2-1 Euler, Hamilton scalar-first $q_{BI}$, "to←from" transforms) is applied **uniformly** | `TO-VERIFY` | A uniformly-applied wrong convention is self-consistent and invisible to consistency tests | Hand-computed expected values: V-FRM-08, V-ATT-01 |
 
@@ -59,7 +63,8 @@ it.
 |---|---|---|---|---|
 | `A-VM-01` | A force source's declared `force_body` and `mass_flow_rate` are **mutually consistent**. RADIUS does not enforce this — enforcing it would require modelling the exhaust, which is out of scope | `OPEN` (unenforceable contract) | An inconsistent source produces a vehicle whose momentum change does not match its mass loss: physically impossible, numerically silent | Both values recorded in the manifest so the inconsistency is detectable after the fact |
 | `A-VM-02` | CM migration is **quasi-static**: its position enters the moment transfer, but momentum from the CM moving relative to the structure is neglected | `OPEN` — **magnitude unquantified** | Rotational response would be wrong by an unknown amount during rapid mass change | No claim may assert the term is small. Quantifying it is open |
-| `A-VM-03` | **Jet damping is omitted** | `OPEN` — **magnitude unbounded** | Simulated pitch/yaw damping is **optimistically low**: oscillations decay more slowly than reality, or fail to decay. Conservative for a stability study, non-conservative for a dispersion study | **No rotational-damping claim is supportable** until a reference bounds it. Highest-priority gap |
+| `A-VM-03` | **Jet damping is omitted.** Re-scoped 2026-09-09: it is the moment arising from **non-zero** exhaust velocity relative to the structure at an offset exit plane — now a single separable term, no longer entangled with $\dot{\mathbf{J}}\boldsymbol{\omega}$ | `OPEN` — **magnitude unbounded** | Simulated pitch/yaw damping is **optimistically low**: oscillations decay more slowly than reality, or fail to decay. Conservative for a stability study, non-conservative for a dispersion study | **No rotational-damping claim is supportable** until a reference bounds it. Highest-priority gap |
+| **`A-VM-05`** | **Ejected mass leaves co-rotating, with negligible velocity relative to the structure at its exit location.** Under this assumption the angular-momentum flux **exactly cancels** $\dot{\mathbf{J}}\boldsymbol{\omega}$, so neither term appears in the rotational equation | `OPEN` (new, ADR-0009) | If the exhaust carries significant transverse relative momentum, the cancellation is only approximate and the residual **is** jet damping (`A-VM-03`). Note this is *not* an assumption that jet damping is small — it is what isolates jet damping as the whole remaining effect | V-EOM-09 / V-VM-10 verify the cancellation case. Bounding the residual needs the `A-VM-03` reference |
 | `A-VM-04` | Mass depletion handled as an event, never a clamp; $m \le 0$ raises | `TO-VERIFY` | A clamp would silently create infinite propellant while producing plausible output | V-VM-03, V-VM-09 |
 
 ## Numerical methods — RS-005
@@ -70,6 +75,7 @@ it.
 | `A-NUM-02` | The coupled system is **non-stiff** across the operating domain, including near mass depletion | `OPEN` — **unassessed** | An explicit method would need an uneconomically small step, or would go unstable | Examine stiffness when the mass model is first exercised |
 | `A-NUM-03` | Reproducibility is bitwise on one platform, tolerance-based across platforms | `TO-VERIFY` | If same-platform bitwise determinism fails, the publication policy's argument for not publishing ensembles (ADR-0008) fails with it | V-NUM-03, V-NUM-04. **Load-bearing** |
 | `A-NUM-04` | Event location by sign change assumes **at most one crossing per step** | `OPEN` | An even number of crossings inside a step is missed entirely — the event never fires and the trajectory continues through a discontinuity | Bounded by choosing $h$ small relative to event timescales; not currently checked |
+| **`A-NUM-05`** | $\mathbf{T}_{BI}$ is evaluated as $[\text{formula}]/(q\cdot q)$, making it a proper rotation at the **non-unit quaternions that necessarily arise inside RK stages** | `TO-VERIFY` (new, audit finding F-3) | Using the raw formula scales every aerodynamic and propulsive force by $\lVert q\rVert^{2}$ inside stages 2–4. At $\lVert q\rVert=1.037$ the matrix is off orthonormality by 0.16 | V-FRM-09, V-NUM-09. The division is chosen over an in-stage normalisation because it introduces no branch and does not alter the stage function |
 
 ## Atmosphere — RS-006
 

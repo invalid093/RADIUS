@@ -110,6 +110,25 @@ $$h \le \frac{1}{20 f_{\max}} = \frac{2\pi}{20\,\omega_{\max}}$$
 accuracy demands $h \le 10$ ms — a factor of nine. The gap is why the stability bound is never used as
 the step-selection criterion.
 
+### Timestep-selection methodology (binding)
+
+$h$ is a **measured, per-experiment quantity**. There is no single correct RADIUS timestep, and the
+value below is not one.
+
+1. **Estimate the fastest retained timescale.** From $\mathbf{J}$ and the aerodynamic moment
+   derivative, $\omega_n \approx \sqrt{\bar q\,S\,d\,|C_{m\alpha}| / J_{yy}}$ at the highest $\bar q$
+   in the scenario. An estimate, not a measurement.
+2. **Set a starting step** from the accuracy rule below — never from the RK4 stability limit.
+3. **Run a refinement study on the actual scenario**: $h, h/2, h/4, h/8$, with a Richardson error
+   estimate against the finest run.
+4. **Require the observed order to be $4.0\pm0.2$ first.** A wrong order means the error model does
+   not apply and the estimate is meaningless, so this gate precedes any use of the error figure.
+5. **Select the largest $h$** whose Richardson error is below the tolerance **declared in advance**
+   for that experiment, then apply a safety factor of 2.
+6. **Record $h$, the study and the tolerance in the experiment manifest.** A step inherited from
+   another experiment without repeating this is not justified.
+7. **Re-run when the fastest retained mode changes** — notably when actuator dynamics arrive.
+
 **Proposed default: $h = 10^{-3}$ s**, pending measurement. `HYPOTHESIS`, not a result: the value is
 justified only by the timestep-refinement study (V-NUM-02), which measures the error at that step
 rather than assuming it. Until that study runs, the default is provisional and must be reported as
@@ -211,6 +230,7 @@ implementation detail and this is where an implementer will look.
 | V-NUM-06 | Order preserved *across* an event (restart correctness) | slope still $4.0 \pm 0.2$ for a trajectory containing an event |
 | V-NUM-07 | Normalisation does not degrade order (RS-002 §6 prediction) | slope unchanged with normalisation on vs off |
 | V-NUM-08 | Invariant drift: $\lVert\mathbf{h}\rVert$ and $T$ on V-EOM-05 over a long run | drift consistent with $O(h^4)$, no secular growth beyond it |
+| **V-NUM-09** | RK-stage correctness: derivative evaluation at a non-unit quaternion uses $\mathbf{T}_{BI}(q)/(q\cdot q)$, so force magnitudes are unscaled | forces independent of $\lVert q\rVert$ to $<10^{-12}$ |
 
 V-NUM-03 is load-bearing for the publication policy, not merely a nicety: it is what makes *not*
 publishing Monte Carlo ensembles legitimate. If it fails, ADR-0008's argument fails with it.
@@ -228,12 +248,13 @@ logic is where order of accuracy quietly dies.
 
 ## 11. Open questions
 
-1. Is $h = 10^{-3}$ s adequate? Unmeasured. It is a proposal, not a result.
+1. Is $h = 10^{-3}$ s adequate? Unmeasured. It is a proposal, not a result — and §4 now specifies
+   the methodology that would answer it rather than leaving the question open-ended.
 2. Does the coupled variable-mass system remain non-stiff across a full burn? If the mass model
    introduces a fast timescale near depletion, the explicit method's step could collapse. Unassessed —
    the stiffness of the coupled system has not been examined and this is a genuine unknown.
-3. Does finite-differencing $\dot{\mathbf{J}}$ inside an RK stage (RS-004 §9) introduce a second
-   discretisation that degrades the observed order? If V-NUM-01 shows a slope below 4 once the mass
-   model is active, this is the first hypothesis to test.
+3. ~~Does finite-differencing $\dot{\mathbf{J}}$ inside an RK stage degrade the observed order?~~
+   **Closed 2026-09-09 by audit finding F-1:** $\dot{\mathbf{J}}$ no longer appears in the equations
+   of motion, so the nested discretisation cannot arise.
 4. Is the block-wise error norm of §5 the right one for a future adaptive controller? It is adequate
    for fixed-step convergence studies; an adaptive method would need a scaled, dimensionless norm.

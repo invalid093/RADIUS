@@ -39,7 +39,7 @@ The consequences, derived in RS-004 §3–4:
 |---|---|---|
 | Momentum flux ("thrust") | $\mathbf{F}_{\text{prop}} = \dot m\,\mathbf{c}$ | Supplied by interface |
 | Moment from an offset thrust line | $\mathbf{r}\times\mathbf{F}_{\text{prop}}$ | Supplied, or computed from a declared offset |
-| Inertia-rate moment | $-\dot{\mathbf{J}}\boldsymbol{\omega}$ | Computed from the mass model |
+| Angular-momentum flux of ejected mass | cancels $\dot{\mathbf{J}}\boldsymbol{\omega}$ under `A-VM-05` | Accounted for analytically — neither term appears (RS-004 §4.1) |
 | Jet damping | $\mathbf{M}_{\text{jet}}$ | **Omitted** — `A-VM-03` |
 | CM migration | $\mathbf{r}_{\text{ref}/\text{cm}}(t)$ | Computed from the mass model; feeds RS-007 §4 |
 
@@ -87,21 +87,28 @@ sources. Coupling them would make a coasting phase a special case of thrusting, 
 
 ## 4. Inertia rate
 
-$\dot{\mathbf{J}}$ enters the rotational equation directly (RS-004 §4). Two ways to obtain it:
+> **Revised 2026-09-09 (audit finding F-1).** $\dot{\mathbf{J}}$ was previously an input to the
+> rotational equation of motion. It is not, and the reason is physical rather than numerical: for
+> **ejected** mass the angular-momentum flux cancels $\dot{\mathbf{J}}\boldsymbol{\omega}$ exactly
+> (RS-004 §4.1). Retaining the term modelled internal redistribution and produced a factor-of-two
+> spurious spin-up. See `PRE_IMPLEMENTATION_MATHEMATICAL_AUDIT.md` §5, ADR-0009.
 
-- **Analytically**, from a differentiable mass model. Exact, and requires the mass model to be
-  differentiable — a real constraint on what mass models are permitted.
-- **By central finite difference** on $\mathbf{J}(t)$. Simple, model-agnostic, and introduces a
-  truncation error.
+`inertia_rate_body(t, m)` is **retained in the interface as a diagnostic**, not as a term in the
+equations of motion. It is useful for reporting how fast the mass properties are changing, and for
+the day RADIUS models internal redistribution — where $-\dot{\mathbf{J}}\boldsymbol{\omega}$ *is* the
+correct term.
 
-**Decision: analytical where the mass model provides it; finite difference only as a documented
-fallback.**
+Two consequences of the correction are worth stating because they simplify the implementation:
 
-`HYPOTHESIS`, flagged for testing: a finite-difference $\dot{\mathbf{J}}$ evaluated **inside an RK
-stage** is a second, nested discretisation. Its error does not necessarily behave like the
-integrator's, and it could degrade the observed order of accuracy. If V-NUM-01 shows a slope below 4
-once the mass model is active, this is the first hypothesis to test (RS-005 §11). Recording the
-prediction now is what makes the eventual diagnosis fast rather than mysterious.
+- The open question of whether to compute $\dot{\mathbf{J}}$ analytically or by finite difference is
+  **closed**: as a diagnostic, either is acceptable, because no result depends on it.
+- The associated hazard — a finite-difference derivative evaluated *inside* an RK stage acting as a
+  second, nested discretisation and degrading the observed convergence order — **disappears entirely**.
+  It is no longer possible to introduce it.
+
+`inertia_body(t, m)` remains a genuine model, not an algebraic function of scalar mass alone: making
+$\mathbf{J}$ a pure function of $m$ would assume self-similar depletion, a restriction RADIUS has no
+reason to impose.
 
 ---
 
@@ -147,7 +154,8 @@ Guard: any evaluation with $m \le 0$ raises. It does not divide.
 | V-VM-02 | Mass conservation: $\int \dot m_{\text{out}}\,dt$ equals the mass actually lost | $<10^{-10}$ relative |
 | V-VM-03 | Depletion event fires at the analytically known time; mass never negative | within event tolerance; no $m\le0$ |
 | V-VM-04 | Zero mass flow reduces exactly to the constant-mass equations | bitwise identical to the constant-mass path |
-| V-VM-05 | $\dot{\mathbf{J}}$ analytical vs finite-difference agreement on a differentiable model | $<10^{-6}$ relative |
+| V-VM-05 | $\dot{\mathbf{J}}$ analytical vs finite-difference agreement (now a **diagnostic** check, not a dynamics check) | $<10^{-6}$ relative |
+| **V-VM-10** | **Variable-mass torque-free spin** (= V-EOM-09): axisymmetric body, uniform depletion, no moment ⟹ $\omega_z$ **constant** | hand-computed; $<10^{-9}$ relative |
 | V-VM-06 | Inertia tensor stays symmetric and positive-definite throughout a burn | no violation |
 | V-VM-07 | Thrust offset produces the expected angular acceleration (= V-EOM-07) | matches $\mathbf{J}^{-1}\mathbf{M}$ |
 | V-VM-08 | Order of accuracy preserved with the mass model active (tests the §4 hypothesis) | slope $4.0\pm0.2$ |
@@ -164,7 +172,7 @@ and hardest to notice.
 
 ## 8. Assumptions registered
 
-`A-VM-01` … `A-VM-04` — see `docs/assumptions.md`.
+`A-VM-01` … `A-VM-05` — see `docs/assumptions.md`.
 
 ---
 
@@ -173,6 +181,12 @@ and hardest to notice.
 1. **How large is the omitted jet-damping moment (`A-VM-03`)?** Unbounded. RADIUS's damping is
    therefore optimistically low, and no rotational-damping claim is supportable. Closing this requires
    a reference (`research/SOURCES.md`, gaps table) and is the highest-priority gap in this document.
+   The F-1 correction improves the *posing* of this question without answering it: jet damping is now
+   a single separable term (non-zero exhaust velocity relative to the structure at an offset exit
+   plane) rather than half of a pair entangled with $\dot{\mathbf{J}}\boldsymbol{\omega}$.
+1b. **Is `A-VM-05` (co-rotating ejection, negligible relative exit velocity) reasonable?** It is the
+   assumption that makes the cancellation exact. It is *not* the same as assuming jet damping is
+   small — it is the assumption that isolates jet damping as the whole of the remaining effect.
 2. **How large is the neglected CM-motion momentum term (`A-VM-02`)?** Also unquantified.
 3. Does the coupled variable-mass system become stiff near depletion? If mass approaches zero while
    force remains finite, acceleration diverges — the event handles the endpoint, but the approach to

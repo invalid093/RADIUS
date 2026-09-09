@@ -1,7 +1,7 @@
 # RADIUS — Current State
 
 **Date:** 2026-09-09 · **Commit:** see `git log -1` · **Branch:** `main`
-**Phase:** 1 of 14 — Research / Architecture
+**Phase:** 1 of 14 — Research / Architecture (specification **audited**, corrections applied)
 
 Concise, factual, self-contained. Per `docs/methodology/PUBLICATION_POLICY.md` §7 this file contains
 no conversation history, no reasoning traces, no logs.
@@ -27,23 +27,37 @@ Independent of AURA (ADR-0002): no import, no shared schema, no dependency.
 | Researched | Frames, attitude, state, equations of motion, integration, atmosphere, aerodynamics, variable mass |
 | Designed | Software architecture; provenance; publication governance; conceptual AURA interface |
 | **Implemented** | **Nothing.** No source code exists |
-| **Verified** | **Nothing.** ~60 tests are *specified*; none written |
+| **Verified** | **Nothing.** ~65 tests are *specified*; none written. The specification itself has been audited (see below) |
 | **Validated** | **Nothing**, and no path to validation currently exists — no independent benchmark has been found |
 
 ---
 
 ## 3. Completed
 
-**Repository.** Created locally and at `https://github.com/invalid093/RADIUS` (public). Two commits
+**Repository.** Created locally and at `https://github.com/invalid093/RADIUS` (public). Four commits
 pushed. Git identity uses a GitHub `noreply` address. Secret scanning and push protection enabled.
 
 **Governance (ADR-0008).** Five-class publication policy; deny-by-default `.gitignore` tested against
 dummy artifacts; pre-push audit checklist covering working tree and history separately; provenance
 chain and counter-based seed derivation specified.
 
-**Specification.** `docs/methodology/NOTATION_AND_CONVENTIONS.md` plus RS-001 … RS-008, a 28-entry
+**Specification.** `docs/methodology/NOTATION_AND_CONVENTIONS.md` plus RS-001 … RS-008, a 31-entry
 assumptions register, an architecture document, a V&V strategy, and the thirteen-question quality
-gate. Eight ADRs.
+gate. Nine ADRs.
+
+**Pre-implementation mathematical audit** (`docs/research/PRE_IMPLEMENTATION_MATHEMATICAL_AUDIT.md`).
+Verdict **PASS WITH REQUIRED CORRECTIONS**; corrections applied. Verified correct by independent
+derivation and numerical check: frame conventions, quaternion kinematics (against a non-principal
+axis), translational dynamics across four limiting cases, the gyroscopic term, the atmosphere model
+against published values. Four defects found and fixed:
+
+- **F-1 (load-bearing).** $-\dot{\mathbf{J}}\boldsymbol{\omega}$ removed from the rotational equation
+  — it models internal redistribution, not ejection, and gave a **factor-of-two** spurious spin-up.
+  ADR-0009, `A-VM-05`.
+- **F-2.** Wind-frame composition sign error; $\beta$ came out negated.
+- **F-3.** $\mathbf{T}_{BI}$ undefined at the non-unit quaternions RK stages produce; now divided by
+  $q\cdot q$. `A-NUM-05`.
+- **F-4.** Quaternion composition order is the reverse of matrix composition order; now stated.
 
 ---
 
@@ -56,6 +70,7 @@ gate. Eight ADRs.
 | Attitude | Quaternion integrated; DCM on demand; Euler at boundaries; post-step normalisation only | 0004 |
 | State | 14 elements: $[\mathbf{p}^I, \mathbf{v}^I, q, \boldsymbol\omega^B, m]$ on $\mathbb{R}^{13}\times S^3$; **inertial** velocity; mass a state | 0005 |
 | Integration | Fixed-step RK4; Euler as comparator; adaptive deferred on determinism grounds; bisection events | 0006 |
+| Variable mass | Rotational equation is $\mathbf{J}\dot{\boldsymbol\omega}+\boldsymbol\omega\times\mathbf{J}\boldsymbol\omega=\mathbf{M}$; inertia-rate term removed | **0009** |
 | Licence | None | 0007 |
 | Publication | Deny-by-default; curated record only | 0008 |
 
@@ -94,7 +109,10 @@ Standard Atmosphere 1976 document directly.
 **To be tested by the first tests written:**
 
 7. Does post-step quaternion normalisation preserve 4th-order accuracy (`A-ATT-01`)? V-NUM-07.
-8. Is $h=10^{-3}$ s adequate (`A-NUM-01`)? V-NUM-02.
+7b. Does the corrected variable-mass rotational equation behave as derived (`A-VM-05`)? **V-EOM-09** —
+   the test whose absence let a factor-of-two error pass a gate.
+8. Is $h=10^{-3}$ s adequate (`A-NUM-01`)? V-NUM-02, now under the timestep-selection methodology of
+   RS-005 §4 rather than as a bare proposal.
 9. Does same-platform bitwise determinism hold (`A-NUM-03`)? V-NUM-03 — **load-bearing for ADR-0008**.
 
 **To verify before implementing:**
@@ -108,9 +126,10 @@ Standard Atmosphere 1976 document directly.
 
 **Phase 2 — `radius/math/` and `radius/frames/`, with their verification tests.**
 
-Start with the **hand-computed convention tests V-FRM-08 and V-ATT-01**, before the modules they test.
-They are the only test class that can catch a uniformly applied wrong convention, which internal
-consistency checks cannot detect by construction.
+Start with the **hand-computed convention tests V-FRM-08, V-ATT-01, V-FRM-09, V-FRM-10 and
+V-ATT-02b**, before the modules they test. They are the only test class that can catch a uniformly
+applied wrong convention, which internal consistency checks cannot detect by construction — as the
+audit's F-2 finding demonstrated concretely.
 
 Then in order: RS-003 state module, RS-004 dynamics, RS-005 integrator, RS-004 §7 analytical cases.
 Do not skip to aerodynamics — the gate does not pass.

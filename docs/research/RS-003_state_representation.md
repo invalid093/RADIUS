@@ -32,6 +32,11 @@ Position of the centre of mass relative to the frame origin, resolved in $I$. Th
 alternative: forces integrate to inertial velocity, which integrates to inertial position, and any
 other choice adds a transformation for nothing.
 
+**$\mathbf{p}^{I}$ tracks the *instantaneous* centre of mass**, which during a burn is a
+**material-changing point**: the trajectory RADIUS computes is the CM trajectory, and relating it to a
+fixed structural point requires $\mathbf{r}_{\text{ref}/\text{cm}}(t)$ from the mass model. Correct,
+but previously implicit; made explicit by the pre-implementation audit (§6).
+
 Altitude is derived, $h = -p^I_z$ (RS-001 §2.1, flat-Earth). It is a named function, not a raw
 component access, so that the ECEF extension changes one function rather than every call site.
 

@@ -20,3 +20,4 @@ a new ADR that says so, and the original stays.
 | [ADR-0006](ADR-0006-numerical-integration.md) | Fixed-step RK4 as the initial integrator | Accepted | 2026-09-09 |
 | [ADR-0007](ADR-0007-licensing-deferred.md) | No licence at this stage | Accepted | 2026-09-09 |
 | [ADR-0008](ADR-0008-publication-architecture.md) | Publication architecture and data governance | Accepted | 2026-09-09 |
+| [ADR-0009](ADR-0009-variable-mass-rotational-equation.md) | Variable-mass rotational equation: the inertia-rate term is removed | Accepted | 2026-09-09 |

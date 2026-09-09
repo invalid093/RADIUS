@@ -155,12 +155,44 @@ $$\mathbf{T}_{BI}(q) = (q_0^2 - \mathbf{q}_v\!\cdot\!\mathbf{q}_v)\,\mathbf{I}_3
 
   where $[\mathbf{a}\times]$ is the skew-symmetric matrix with $[\mathbf{a}\times]\mathbf{b} = \mathbf{a}\times\mathbf{b}$.
 
+- **Rotation operator.** RADIUS's $\mathbf{T}_{BI}(q)$ is the **transpose** of the conventional
+  Hamilton *active* rotation matrix (note the sign of the $-2q_0[\mathbf{q}_v\times]$ term above). It
+  therefore corresponds to
+
+  $$\tilde{\mathbf{v}}^{B} = q^{*} \otimes \tilde{\mathbf{v}}^{I} \otimes q$$
+
+  and **not** to $q\otimes\tilde{\mathbf{v}}\otimes q^{*}$. Both appear in the literature under the
+  name "Hamilton convention", so the operator is stated rather than left to be inferred.
+
+- **Composition order is REVERSED relative to matrices.** Matrices compose by adjacency
+  ($\mathbf{T}_{CA}=\mathbf{T}_{CB}\mathbf{T}_{BA}$); quaternions in this convention do not:
+
+  $$\mathbf{T}(q_a \otimes q_b) = \mathbf{T}(q_b)\,\mathbf{T}(q_a)$$
+
+  An implementer would reasonably assume the two orders match. They do not. Confirmed numerically in
+  the pre-implementation audit and pinned by test V-FRM-10.
+
+- **Evaluation at non-unit $q$.** Inside an RK stage the quaternion block is **necessarily** not of
+  unit norm. Since $\mathbf{T}_{BI}(kq) = k^{2}\,\mathbf{T}_{BI}(q)$, the raw formula is not a rotation
+  there — at $k=1.037$ it is off orthonormality by 0.16. RADIUS therefore defines, for all $q\neq0$:
+
+  $$\mathbf{T}_{BI}(q) = \frac{(q_0^2-\mathbf{q}_v\!\cdot\!\mathbf{q}_v)\,\mathbf{I}_3 + 2\,\mathbf{q}_v\mathbf{q}_v^{\mathsf{T}} - 2q_0\,[\mathbf{q}_v\times]}{q\cdot q}$$
+
+  This is a division, not a normalisation: it evaluates the same smooth $f$ the integrator's order
+  conditions assume, and introduces no branch — an in-stage `if norm != 1: normalise` would break
+  both properties. Registered as `A-NUM-05`, pinned by V-FRM-09.
+
 - **Sign ambiguity:** $q$ and $-q$ represent the same attitude. RADIUS canonicalises to $q_0 \ge 0$
   **at output and comparison boundaries only** — never during integration, where forcing the sign
   would introduce a discontinuity in a continuous state.
 
 - **Norm:** $\lVert q \rVert = 1$ is a constraint, not an output. Its numerical maintenance is
   specified in RS-005.
+
+**Independently audited 2026-09-09.** $\mathbf{T}_{BI}(q)$ was compared against
+$\mathbf{T}_{BI}(\phi,\theta,\psi)$ built from the elementary matrices, over 2000 random attitudes:
+maximum element error $5.6\times10^{-16}$. See
+`docs/research/PRE_IMPLEMENTATION_MATHEMATICAL_AUDIT.md` §2.
 
 **Consistency check performed.** Substituting a pure yaw quaternion
 $q = (\cos\frac{\psi}{2},0,0,\sin\frac{\psi}{2})$ into $\mathbf{T}_{BI}(q)$ above yields exactly
