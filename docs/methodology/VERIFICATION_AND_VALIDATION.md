@@ -40,8 +40,40 @@ this table said "verification tests written: none", which stopped being true at 
 |---|---|
 | Verified | **the frame and attitude conventions only** — V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01, against hand-derived anchors. Nothing else |
 | Validated | **nothing** |
-| Verification tests written | **31**: 31 passing, 0 failing, **0 skipped** — out of 65+ *specified* across RS-001…RS-008 |
+| Verification tests written | **45**: 45 passing, 0 failing, **0 skipped** — out of 65+ *specified* across RS-001…RS-008 |
+| Frozen analytical anchors, awaiting an implementation to consume them | **V-EOM-01**, **V-EOM-02** — established as exact oracles; no translational dynamics code exists |
 | Independent reference data held | **none** |
+
+### Translational EOM analytical anchors
+
+Frozen **before** any translational dynamics implementation exists, in
+`tests/test_eom_anchors.py`. Governing equation: RS-004 §3.4, on the state of RS-003 §6.
+
+| Anchor | Case | Closed form | Frozen oracle |
+|---|---|---|---|
+| **V-EOM-01** | Force-free straight-line translational limit | `v(t) = v0`, `p(t) = p0 + v0 t` | `p0=(12,−7,31)`, `v0=(35,−11,8)`, `t=4` → `v=(35,−11,8)`, `p=(152,−51,63)` |
+| **V-EOM-02** | Constant-gravity ballistic translational limit | `v(t) = v0 + (0,0,g0 t)`, `p(t) = p0 + v0 t + (0,0,g0 t²/2)` | `p0=(10,20,100)`, `v0=(40,−15,−25)`, `g0=10`, `t=3` → `v=(40,−15,5)`, `p=(130,−25,70)` |
+
+> **These are analytical verification anchors for limiting cases. They do not constitute
+> validation against flight data, a high-fidelity trajectory benchmark, or validation of
+> the complete 6-DOF model.**
+
+Both cases set `F_aero^B = F_prop^B = 0`, so the term `T_IB (F_aero + F_prop)` vanishes
+identically. **The force-free construction intentionally removes dependence on the
+body-to-inertial force transformation**, which is anchored separately (V-FRM-08,
+V-ATT-01), so that a failure localises to the inertial translational equation.
+
+`LIMITATION`, asserted rather than assumed in the test file: the same construction makes
+these anchors structurally **blind** to a body/inertial confusion in the force path,
+because they contain no force path. Gravity-sign and missing-½ errors are likewise
+invisible to V-EOM-01, which has no gravity. **An anchor carrying a non-zero body force
+at a known attitude is required to guard the force-transformation path, and does not yet
+exist.**
+
+`FACT`: the value supplied for V-EOM-02's `p_z(3)` when this anchor was commissioned was
+55; independent derivation gives **70**, and 70 is what is frozen. The discrepancy is
+documented in the test module. Freezing 55 would have installed an arithmetically false
+oracle permanently.
 
 ### Traceability — audit findings to their guarding anchors
 
@@ -87,7 +119,8 @@ unestablished — and it must say so.
 The strongest evidence available, because the reference is exact and independent of the
 implementation. Specified in RS-004 §7; anchors:
 
-- **V-EOM-02** — constant gravity gives an exact parabola.
+- **V-EOM-01, V-EOM-02** — force-free straight line, and constant gravity giving an exact
+  parabola. **Frozen as exact oracles** in `tests/test_eom_anchors.py`; see §2.
 - **V-EOM-04** — torque-free axisymmetric coning at $\lambda = \frac{J_z-J_t}{J_t}\omega_z$; a
   *quantitative* check on the gyroscopic term.
 - **V-EOM-06 / V-VM-01 — Tsiolkovsky.** $\Delta v = \lVert\mathbf{c}\rVert\ln(m_0/m_f)$: the only
