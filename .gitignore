@@ -1,0 +1,67 @@
+# ---- RADIUS .gitignore ----
+# Principle: Git stores source, configuration, documentation, specifications,
+# manifests and small reference data. It does NOT store bulk trajectory output,
+# Monte Carlo ensembles, caches, or regenerable intermediates. A run is
+# reproduced from its configuration + seed, not restored from a tracked blob.
+
+# --- Bulk / regenerable simulation output ---
+results/**
+!results/.gitkeep
+!results/**/README.md
+!results/**/manifest.json
+!results/**/manifest.yaml
+!results/**/metrics.json
+*.npz
+*.npy
+*.parquet
+*.h5
+*.hdf5
+*.pkl
+# Exception: small analytically-derived reference trajectories used as regression
+# fixtures are evidence, not bulk data. Add them individually with a justification.
+!validation/reference/**
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.python-version
+.ipynb_checkpoints/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+
+# --- Secrets: never tracked, in any form ---
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+secrets.*
+credentials.*
+id_rsa*
+id_ed25519*
+*.token
+
+# --- Scratch ---
+scratch/
+tmp/
+*.log
+!research/research_log/*.md
