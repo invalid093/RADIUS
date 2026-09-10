@@ -1,8 +1,8 @@
-"""V-EOM-01 and V-EOM-02 — frozen analytical anchors for the translational EOM.
+"""V-EOM-01, V-EOM-02, V-EOM-03 — frozen analytical anchors for the translational EOM.
 
 WHAT THIS FILE IS
 -----------------
-Two closed-form limiting cases of the translational equations of motion, frozen as
+Three closed-form limiting cases of the translational equations of motion, frozen as
 exact numerical oracles **before any translational dynamics implementation exists**.
 There is no ``radius/dynamics.py``, and this file deliberately does not create one, call
 one, or propose an API for one.  Nothing here imports from ``radius``.
@@ -22,13 +22,17 @@ GOVERNING EQUATION (RS-004, already audited)
 
     m vdot^I = T_IB (F_aero^B + F_prop^B) + m g(h) zhat_I
 
-Both anchors set ``F_aero^B = F_prop^B = 0``, so the transformation term vanishes
-**identically**.  That is intentional: it isolates the inertial translational equation
-from the body-to-inertial force transformation, which is already covered by its own
+**V-EOM-01 and V-EOM-02** set ``F_aero^B = F_prop^B = 0``, so the transformation term
+vanishes **identically**.  That is intentional: it isolates the inertial translational
+equation from the body-to-inertial force transformation, which is covered by its own
 anchors (V-FRM-08, V-ATT-01).  The cost of that isolation is stated honestly in
-:class:`TestEomAnchorDiscrimination` — with no force path, these anchors are structurally
-incapable of detecting a body/inertial mix-up in one, and a separate anchor with a
-non-zero body force is needed for that.
+:class:`TestEomAnchorDiscrimination` — with no force path, those two anchors are
+structurally incapable of detecting a body/inertial mix-up.
+
+**V-EOM-03 closes exactly that gap**: a constant *non-zero* body force at a fixed known
+attitude, so the ``T_IB`` force-transformation path is exercised while the problem stays
+analytically solvable.  It carries no gravity, so the three anchors between them cover
+the gravity path and the force path without either masking the other.
 
 FRAME CONVENTION
 ----------------
@@ -406,6 +410,382 @@ class TestEomAnchorDiscrimination(unittest.TestCase):
                     transformed, zero_force,
                     "The force term must vanish identically for any attitude.",
                 )
+
+
+# ======================================================================================
+# V-EOM-03 — constant non-zero body force at a fixed known attitude
+# ======================================================================================
+#
+# WHY THIS ANCHOR EXISTS
+# ----------------------
+# V-EOM-01 and V-EOM-02 both set the body force to zero, so the term
+# ``T_IB (F_aero + F_prop)`` is ``T_IB @ 0 = 0`` for every attitude.  That isolation is
+# deliberate, but it leaves the structural blind spot recorded in
+# ``TestEomAnchorDiscrimination.test_body_inertial_confusion_is_invisible_by_construction``:
+# **with zero applied force, an incorrect body-to-inertial force transformation cannot
+# be detected.**  V-EOM-03 closes exactly that gap and nothing else.
+#
+# GOVERNING CASE
+# --------------
+#     m vdot^I = T_IB F^B          (gravity zero, propulsion zero, mass constant)
+#     a^I      = (1/m) T_IB F^B    constant, so
+#     v^I(t)   = v0 + a^I t
+#     p^I(t)   = p0 + v0 t + a^I t^2 / 2
+#
+# THE ATTITUDE IS A PARAMETER OF THE TEST CASE, NOT A STATE BEING INTEGRATED.
+# No quaternion, Euler angle or angular rate is propagated here, and no rotational
+# equation appears.  The attitude is fixed by construction so that the force
+# transformation can be exercised without depending on rotational dynamics.
+# ======================================================================================
+
+
+def _r_x(cos_a, sin_a):
+    """Elementary passive rotation, transcribed from NOTATION_AND_CONVENTIONS.md sec 4."""
+    return [[Fraction(1), Fraction(0), Fraction(0)],
+            [Fraction(0), cos_a, sin_a],
+            [Fraction(0), -sin_a, cos_a]]
+
+
+def _r_y(cos_a, sin_a):
+    return [[cos_a, Fraction(0), -sin_a],
+            [Fraction(0), Fraction(1), Fraction(0)],
+            [sin_a, Fraction(0), cos_a]]
+
+
+def _r_z(cos_a, sin_a):
+    return [[cos_a, sin_a, Fraction(0)],
+            [-sin_a, cos_a, Fraction(0)],
+            [Fraction(0), Fraction(0), Fraction(1)]]
+
+
+def _matmul(a, b):
+    return [[sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3)]
+            for i in range(3)]
+
+
+def _matvec(a, v):
+    return tuple(sum(a[i][k] * v[k] for k in range(3)) for i in range(3))
+
+
+def _transpose(a):
+    return [[a[j][i] for j in range(3)] for i in range(3)]
+
+
+def _t_bi_from_euler(cph, sph, cth, sth, cps, sps):
+    """T_BI = R_x(phi) R_y(theta) R_z(psi), the documented 3-2-1 composition."""
+    return _matmul(_r_x(cph, sph), _matmul(_r_y(cth, sth), _r_z(cps, sps)))
+
+
+def _closed_form_velocity_constant_accel(v0, accel, t):
+    return tuple(v + a * t for v, a in zip(v0, accel))
+
+
+def _closed_form_position_constant_accel(p0, v0, accel, t, half=Fraction(1, 2)):
+    return tuple(p + v * t + half * a * t * t for p, v, a in zip(p0, v0, accel))
+
+
+class VEOM03BodyForceFixedAttitude:
+    """V-EOM-03 — constant body force at a fixed attitude. Frozen oracle.
+
+    CASE SELECTION — CHOSEN BY ANALYSIS, NOT ASSUMED
+    ------------------------------------------------
+    Candidate cases were scored against all eleven required mutations before this one was
+    fixed.  Two candidate constructions were **rejected because they silently void a
+    required mutation**:
+
+    * ``m = 1`` makes "multiply by mass instead of dividing" invisible, since 1/1 == 1*1.
+      Hence ``m = 5 kg``.
+    * Equal body-force components make "body-force component permutation" invisible.
+      Hence three distinct, non-zero components with mixed signs.
+
+    A third, not on the required list but avoided anyway: equal Euler angles would make an
+    angle permutation invisible, so the three angles are distinct.
+
+    ATTITUDE.  Chosen from Pythagorean triples so that **every DCM entry is an exact
+    rational** — no radicals, no floating point, and the whole oracle auditable by hand:
+
+        phi   : cos = 4/5, sin =  3/5   (+36.8699 deg)
+        theta : cos = 3/5, sin =  4/5   (+53.1301 deg)
+        psi   : cos = 4/5, sin = -3/5   (-36.8699 deg)
+
+    All three differ; theta lies inside the documented [-90, +90] deg range.  The
+    resulting T_BI has **no zero entries**, which matters: a zero entry is somewhere a
+    mutation can hide.
+
+        T_BI = R_x(phi) R_y(theta) R_z(psi)
+             = (1/125) [[  60,  -45, -100],
+                        [ 108,   44,   45],
+                        [  19, -108,   60]]
+
+        T_IB = T_BI^T
+             = (1/125) [[  60,  108,   19],
+                        [ -45,   44, -108],
+                        [-100,   45,   60]]
+
+    FORCE AND MASS.  ``F^B = (-375, -250, 500) N`` and ``m = 5 kg``, giving, by hand:
+
+        125 * T_IB F^B / 125
+            = (60(-3) + 108(-2) + 19(4),
+               -45(-3) +  44(-2) - 108(4),
+              -100(-3) +  45(-2) +  60(4))  * 125 / 125
+            = (-180 - 216 + 76,  135 - 88 - 432,  300 - 90 + 240)
+            = (-320, -385, 450) N
+
+        a^I = (1/5)(-320, -385, 450) = (-64, -77, 90) m/s^2
+
+    Three distinct non-zero acceleration components with mixed signs.  Every value in
+    this anchor is an exact integer.
+
+    NOT A VALIDATION.  This anchor verifies a translational force transformation and a
+    closed-form constant-acceleration propagation.  It does not validate a 6-DOF dynamics
+    implementation, an aerodynamic model, or anything physical.
+    """
+
+    # Attitude, as exact cosine/sine pairs. Degrees given only for the reader.
+    COS_PHI, SIN_PHI = Fraction(4, 5), Fraction(3, 5)      # +36.8699 deg
+    COS_THETA, SIN_THETA = Fraction(3, 5), Fraction(4, 5)  # +53.1301 deg
+    COS_PSI, SIN_PSI = Fraction(4, 5), Fraction(-3, 5)     # -36.8699 deg
+
+    # Hand-derived DCM, written as integers over 125 so the literal stays readable.
+    _D = Fraction(1, 125)
+    T_BI_EXPECTED = [[_D * 60, _D * -45, _D * -100],
+                     [_D * 108, _D * 44, _D * 45],
+                     [_D * 19, _D * -108, _D * 60]]
+    T_IB_EXPECTED = [[_D * 60, _D * 108, _D * 19],
+                     [_D * -45, _D * 44, _D * -108],
+                     [_D * -100, _D * 45, _D * 60]]
+
+    MASS = Fraction(5)                    # kg. NOT 1 -- see the class docstring.
+    F_BODY = _v(-375, -250, 500)          # N, body axes; three distinct non-zero values
+    A_EXPECTED = _v(-64, -77, 90)         # m/s^2, inertial
+
+    P0 = _v(5, 15, -25)                   # m,   inertial
+    V0 = _v(10, -30, 20)                  # m/s, inertial
+    T = Fraction(4)                       # s
+
+    # v(4) = v0 + 4a = (10 - 256, -30 - 308, 20 + 360)
+    V_EXPECTED = _v(-246, -338, 380)
+    # p(4) = p0 + 4 v0 + 8 a = (5 + 40 - 512, 15 - 120 - 616, -25 + 80 + 720)
+    P_EXPECTED = _v(-467, -721, 775)
+
+
+class TestVEOM03AnchorIntegrity(unittest.TestCase):
+    """The frozen V-EOM-03 oracle is internally consistent, in exact arithmetic.
+
+    The derivation chain runs strictly:
+
+        published convention -> independently written DCM -> transformed force
+                             -> acceleration -> closed-form velocity and position
+
+    Nothing here imports ``radius``; the elementary rotations above are transcribed from
+    the specification, not copied from ``radius/frames.py``.  Copying production code and
+    calling it an independent oracle would defeat the purpose of the anchor.
+    """
+
+    C = VEOM03BodyForceFixedAttitude
+
+    def test_dcm_literal_matches_the_independently_composed_product(self):
+        composed = _t_bi_from_euler(self.C.COS_PHI, self.C.SIN_PHI,
+                                    self.C.COS_THETA, self.C.SIN_THETA,
+                                    self.C.COS_PSI, self.C.SIN_PSI)
+        self.assertEqual(
+            composed, self.C.T_BI_EXPECTED,
+            "V-EOM-03: the frozen T_BI literal must equal R_x(phi) R_y(theta) R_z(psi) "
+            "built from the documented elementary matrices.",
+        )
+
+    def test_dcm_is_exactly_orthonormal_with_unit_determinant(self):
+        t_bi = self.C.T_BI_EXPECTED
+        identity = [[Fraction(1 if i == j else 0) for j in range(3)] for i in range(3)]
+        self.assertEqual(_matmul(t_bi, _transpose(t_bi)), identity,
+                         "V-EOM-03: T_BI must be exactly orthonormal (rational).")
+        det = (t_bi[0][0] * (t_bi[1][1] * t_bi[2][2] - t_bi[1][2] * t_bi[2][1])
+               - t_bi[0][1] * (t_bi[1][0] * t_bi[2][2] - t_bi[1][2] * t_bi[2][0])
+               + t_bi[0][2] * (t_bi[1][0] * t_bi[2][1] - t_bi[1][1] * t_bi[2][0]))
+        self.assertEqual(det, 1, "V-EOM-03: det(T_BI) must be exactly +1.")
+
+    def test_t_ib_literal_is_the_transpose_of_t_bi(self):
+        self.assertEqual(self.C.T_IB_EXPECTED, _transpose(self.C.T_BI_EXPECTED),
+                         "V-EOM-03: T_IB is by definition the transpose of T_BI.")
+
+    def test_acceleration_matches_the_transformed_force_over_mass(self):
+        accel = tuple(x / self.C.MASS
+                      for x in _matvec(self.C.T_IB_EXPECTED, self.C.F_BODY))
+        self.assertEqual(
+            accel, self.C.A_EXPECTED,
+            "V-EOM-03: a^I = (1/m) T_IB F^B must equal the frozen (-64, -77, 90).",
+        )
+
+    def test_velocity_and_position_match_the_closed_forms(self):
+        c = self.C
+        self.assertEqual(
+            _closed_form_velocity_constant_accel(c.V0, c.A_EXPECTED, c.T),
+            c.V_EXPECTED, "V-EOM-03: v(t) = v0 + a t.")
+        self.assertEqual(
+            _closed_form_position_constant_accel(c.P0, c.V0, c.A_EXPECTED, c.T),
+            c.P_EXPECTED, "V-EOM-03: p(t) = p0 + v0 t + a t^2 / 2.")
+
+    def test_v_eom_03_frozen_values_are_exactly_representable(self):
+        c = self.C
+        for name in ("F_BODY", "A_EXPECTED", "P0", "V0", "V_EXPECTED", "P_EXPECTED"):
+            for component in getattr(c, name):
+                with self.subTest(field=name, value=component):
+                    self.assertEqual(Fraction(float(component)), component)
+
+    def test_anchor_rejects_a_deliberately_incorrect_oracle(self):
+        """Required integrity check: the tests above must actually be capable of failing.
+
+        A frozen oracle that agrees with the closed form no matter what it contains would
+        be worthless.  Perturbing one component of the acceleration by 1 m/s^2, or one
+        component of the force by 1 N, must break the agreement.
+        """
+        c = self.C
+        bad_accel = _add(c.A_EXPECTED, _v(1, 0, 0))
+        self.assertNotEqual(
+            _closed_form_velocity_constant_accel(c.V0, bad_accel, c.T), c.V_EXPECTED,
+            "A wrong acceleration must not satisfy the frozen velocity oracle.")
+        self.assertNotEqual(
+            _closed_form_position_constant_accel(c.P0, c.V0, bad_accel, c.T),
+            c.P_EXPECTED,
+            "A wrong acceleration must not satisfy the frozen position oracle.")
+        bad_force = _add(c.F_BODY, _v(0, 1, 0))
+        self.assertNotEqual(
+            tuple(x / c.MASS for x in _matvec(c.T_IB_EXPECTED, bad_force)),
+            c.A_EXPECTED,
+            "A wrong body force must not reproduce the frozen acceleration.")
+
+    def test_case_construction_avoids_the_two_known_traps(self):
+        """Guards the anchor's own discriminating power against a later 'tidy-up'.
+
+        Both traps were found during case selection, and each silently voids a required
+        mutation if violated.
+        """
+        self.assertNotEqual(
+            self.C.MASS, 1,
+            "V-EOM-03 requires m != 1: with m = 1, multiplying by mass and dividing by "
+            "mass give identical results and that mutation becomes undetectable.")
+        magnitudes = {abs(component) for component in self.C.F_BODY}
+        self.assertEqual(
+            len(magnitudes), 3,
+            "V-EOM-03 requires three DISTINCT body-force magnitudes: with repeated "
+            "components a permutation of the force is undetectable.")
+        self.assertNotIn(Fraction(0), self.C.F_BODY,
+                         "V-EOM-03 requires a fully non-axis-aligned body force.")
+        self.assertNotIn(
+            Fraction(0), [x for row in self.C.T_BI_EXPECTED for x in row],
+            "V-EOM-03 requires an attitude whose DCM has no zero entries; a zero entry "
+            "is somewhere a mutation can hide.")
+
+
+class TestVEOM03Discrimination(unittest.TestCase):
+    """What V-EOM-03 detects, with margins, against the eleven required mutations.
+
+    Every wrong convention is built from the same independently transcribed elementary
+    matrices, so each comparison is literal-against-literal rather than one
+    implementation against another.
+    """
+
+    C = VEOM03BodyForceFixedAttitude
+
+    def _observables(self, accel, p0=None, v0=None, half=Fraction(1, 2)):
+        c = self.C
+        p0 = c.P0 if p0 is None else p0
+        v0 = c.V0 if v0 is None else v0
+        return (accel,
+                _closed_form_velocity_constant_accel(v0, accel, c.T),
+                _closed_form_position_constant_accel(p0, v0, accel, c.T, half))
+
+    def _assert_detected(self, label, accel, min_accel_margin):
+        c = self.C
+        a_w, v_w, p_w = self._observables(accel)
+        margin = max(abs(x - y) for x, y in zip(a_w, c.A_EXPECTED))
+        self.assertGreaterEqual(
+            margin, min_accel_margin,
+            f"V-EOM-03 must detect: {label} (acceleration margin {margin}).")
+        self.assertNotEqual(v_w, c.V_EXPECTED, f"{label}: velocity must differ.")
+        self.assertNotEqual(p_w, c.P_EXPECTED, f"{label}: position must differ.")
+
+    def _accel_from(self, dcm, force=None, mass=None):
+        c = self.C
+        force = c.F_BODY if force is None else force
+        mass = c.MASS if mass is None else mass
+        return tuple(x / mass for x in _matvec(dcm, force))
+
+    def test_1_and_2_t_bi_used_instead_of_t_ib_which_is_the_transpose(self):
+        """Mutations 1 and 2 are the same mutation: T_IB is *defined* as T_BI
+        transposed, so 'used T_BI' and 'transposed the intended DCM' are one error, not
+        two.  Recorded rather than counted twice."""
+        self._assert_detected("T_BI used where T_IB is required (= transpose)",
+                              self._accel_from(self.C.T_BI_EXPECTED), 34)
+
+    def test_3_reversed_euler_composition_order(self):
+        c = self.C
+        reversed_t_bi = _matmul(_r_z(c.COS_PSI, c.SIN_PSI),
+                                _matmul(_r_y(c.COS_THETA, c.SIN_THETA),
+                                        _r_x(c.COS_PHI, c.SIN_PHI)))
+        self._assert_detected("reversed Euler composition R_z R_y R_x",
+                              self._accel_from(_transpose(reversed_t_bi)), 90)
+
+    def test_4_incorrect_euler_sign_convention(self):
+        c = self.C
+        # (a) active elementary matrices, i.e. every elementary rotation transposed.
+        active = _matmul(_transpose(_r_x(c.COS_PHI, c.SIN_PHI)),
+                         _matmul(_transpose(_r_y(c.COS_THETA, c.SIN_THETA)),
+                                 _transpose(_r_z(c.COS_PSI, c.SIN_PSI))))
+        self._assert_detected("active elementary rotations",
+                              self._accel_from(_transpose(active)), 84)
+        # (b) all three angles negated.
+        negated = _t_bi_from_euler(c.COS_PHI, -c.SIN_PHI,
+                                   c.COS_THETA, -c.SIN_THETA,
+                                   c.COS_PSI, -c.SIN_PSI)
+        self._assert_detected("all Euler angles negated",
+                              self._accel_from(_transpose(negated)), 84)
+
+    def test_5_body_force_components_permuted(self):
+        c = self.C
+        permuted = (c.F_BODY[2], c.F_BODY[0], c.F_BODY[1])
+        self._assert_detected("body-force components cyclically permuted",
+                              self._accel_from(c.T_IB_EXPECTED, force=permuted), 221)
+
+    def test_6_body_force_sign_reversed(self):
+        c = self.C
+        negated_force = tuple(-x for x in c.F_BODY)
+        self._assert_detected("body-force sign reversed",
+                              self._accel_from(c.T_IB_EXPECTED, force=negated_force),
+                              180)
+
+    def test_7_multiplied_by_mass_instead_of_divided(self):
+        c = self.C
+        wrong = tuple(x * c.MASS for x in _matvec(c.T_IB_EXPECTED, c.F_BODY))
+        self._assert_detected("multiplied by mass instead of dividing", wrong, 2160)
+
+    def test_8_acceleration_sign_reversed(self):
+        self._assert_detected("acceleration sign reversed",
+                              tuple(-x for x in self.C.A_EXPECTED), 180)
+
+    def test_9_missing_one_half_in_position_propagation(self):
+        """Velocity is unaffected, so this is a position-only discriminator."""
+        c = self.C
+        _, v_w, p_w = self._observables(c.A_EXPECTED, half=Fraction(1))
+        self.assertEqual(v_w, c.V_EXPECTED,
+                         "the 1/2 factor appears only in the position term")
+        margin = max(abs(x - y) for x, y in zip(p_w, c.P_EXPECTED))
+        self.assertGreaterEqual(margin, 720,
+                                "V-EOM-03 must detect a missing 1/2 (margin 720 m).")
+
+    def test_10_incorrect_initial_position(self):
+        c = self.C
+        _, _, p_w = self._observables(c.A_EXPECTED, p0=_add(c.P0, _v(1, 0, 0)))
+        self.assertEqual(max(abs(x - y) for x, y in zip(p_w, c.P_EXPECTED)), 1,
+                         "V-EOM-03 must detect a 1 m initial-position error.")
+
+    def test_11_incorrect_initial_velocity(self):
+        c = self.C
+        _, v_w, p_w = self._observables(c.A_EXPECTED, v0=_add(c.V0, _v(1, 0, 0)))
+        self.assertEqual(max(abs(x - y) for x, y in zip(v_w, c.V_EXPECTED)), 1,
+                         "V-EOM-03 must detect a 1 m/s initial-velocity error.")
+        self.assertEqual(max(abs(x - y) for x, y in zip(p_w, c.P_EXPECTED)), c.T,
+                         "the same error must displace position by v_err * t.")
 
 
 if __name__ == "__main__":
