@@ -27,6 +27,9 @@ named and registered, because an unnamed omission is indistinguishable from an e
 | $\boldsymbol{\omega} \equiv \boldsymbol{\omega}^{B}_{B/I}$ | angular velocity of $B$ relative to $I$ | $B$ | rad·s⁻¹ |
 | $m$ | total instantaneous vehicle mass | — | kg |
 | $\mathbf{J}$ | inertia tensor about the CM | $B$ | kg·m² |
+| $J_{xx}, J_{yy}, \ldots$ | components of $\mathbf{J}$, resolved in $B$ | $B$ | kg·m² |
+| $J_\parallel,\ J_\perp$ | principal moments about the symmetry axis and about any transverse axis — **axisymmetric bodies only** (ADR-0010, NOTATION §5.1). A RADIUS vehicle's symmetry axis is $x_B$: $J_{xx}=J_\parallel$, $J_{yy}=J_{zz}=J_\perp$ when principal axes coincide with $B$ | — | kg·m² |
+| $\omega_\parallel$ | component of $\boldsymbol{\omega}$ along the symmetry axis; for a RADIUS vehicle, the roll rate $p$ | $B$ | rad·s⁻¹ |
 | $\mathbf{F}$ | resultant external force | as marked | N |
 | $\mathbf{M}$ | resultant external moment **about the CM** | $B$ | N·m |
 | $\mathbf{T}_{BI}(q)$ | transformation $I \to B$ | — | — |
@@ -160,6 +163,11 @@ inertia proportional to mass:
 | Truth — each element leaves carrying its own angular momentum | **10.000** rad·s⁻¹ |
 | Previous formulation, retaining $-\dot{\mathbf{J}}\boldsymbol{\omega}$ | **20.000** rad·s⁻¹ |
 
+> **Notation (ADR-0010).** $\omega_z$ in this calculation is the spin component about the symmetry
+> axis, $\omega_\parallel$, written in a $z$-symmetric labelling — the canonical frame $P$ of NOTATION
+> §5.1. For a RADIUS vehicle, whose symmetry axis is $x_B$, it is the roll rate $p$. The calculation
+> and its result are unchanged.
+
 Retaining the term forces conservation of $\mathbf{J}\boldsymbol{\omega}$ — the physics of a skater
 pulling their arms in. That is **internal redistribution**, not ejection. When mass is ejected, every
 material element keeps its own angular velocity, so the remaining body spins at the same rate with
@@ -171,12 +179,12 @@ it ever does, the term returns, with its own derivation.
 
 ### 4.3 Term by term
 
-| Term | Physical meaning | Status in RADIUS |
+| Term | Physical meaning | Status (vocabulary: ADR-0010) |
 |---|---|---|
-| $\mathbf{M}_{\text{aero}}$ | aerodynamic moment about the CM | **Implemented** (RS-007) |
-| $\mathbf{M}_{\text{prop}}$ | moment from a thrust line not through the CM | **Implemented** via interface (RS-008) |
-| $-\boldsymbol{\omega}\times(\mathbf{J}\boldsymbol{\omega})$ | gyroscopic coupling. Source of coning and of intermediate-axis instability | **Implemented.** Audit-verified conservative: $\lVert\mathbf{h}\rVert$ drift $5\times10^{-16}$, energy drift $2\times10^{-14}$ over 8 s |
-| angular-momentum flux of ejected mass | cancels $\dot{\mathbf{J}}\boldsymbol{\omega}$ under `A-VM-05` | **Accounted for analytically** — which is why neither term appears |
+| $\mathbf{M}_{\text{aero}}$ | aerodynamic moment about the CM | **Specified** (RS-007). Not yet implemented; no traceable coefficient source (Q8, `A-AER-03`) |
+| $\mathbf{M}_{\text{prop}}$ | moment from a thrust line not through the CM | **Specified** as an interface input (RS-008 §3.1). Not yet implemented |
+| $-\boldsymbol{\omega}\times(\mathbf{J}\boldsymbol{\omega})$ | gyroscopic coupling. Source of coning and of intermediate-axis instability | **Specified. Verification anchor established** (V-EOM-04). Not yet implemented. The pre-implementation audit's own integration of this term was conservative — $\lVert\mathbf{h}\rVert$ drift $5\times10^{-16}$, energy drift $2\times10^{-14}$ over 8 s (audit §5.4) — an audit calculation, not a property of RADIUS code |
+| angular-momentum flux of ejected mass | cancels $\dot{\mathbf{J}}\boldsymbol{\omega}$ under `A-VM-05` | **Analytically verified**: cancels exactly under `A-VM-05` (§4.1, ADR-0009), which is why neither term appears. Anchor V-EOM-09 planned |
 | **jet damping** | arises only when the exhaust leaves with **non-zero** velocity relative to the structure, at a point offset from the CM. Opposes transverse rotation | **OMITTED.** `A-VM-03` |
 
 ### 4.4 On the omission of jet damping
@@ -222,17 +230,26 @@ supplied by the interface of RS-008. Depletion is handled as an **event** (RS-00
 These exist *because* the equations were written to make them possible. Each isolates a subset of
 terms so that a failure localises. Ordered so that each test's prerequisites are already verified.
 
-| ID | Case | Configuration | Closed-form reference | Isolates |
-|---|---|---|---|---|
-| V-EOM-01 | Force-free translation | $\mathbf{F}=0$, $g=0$ | $\mathbf{p}(t) = \mathbf{p}_0 + \mathbf{v}_0 t$ | integrator, position/velocity coupling |
-| V-EOM-02 | Constant gravity | $g = g_0$, no aero, no thrust | parabola, exact | gravity sign and magnitude |
-| V-EOM-03 | Torque-free, constant rate about a principal axis | $\mathbf{M}=0$, $\boldsymbol{\omega}_0 \parallel$ principal axis | $\boldsymbol{\omega}$ constant; $q(t)$ closed form | quaternion kinematics, gyroscopic term vanishing correctly |
-| V-EOM-04 | Torque-free axisymmetric coning | $J_x = J_y = J_t \ne J_z$, $\boldsymbol{\omega}_0$ off-axis | transverse $\boldsymbol{\omega}$ rotates in body axes at $\lambda = \frac{J_z - J_t}{J_t}\omega_z$; $\omega_z$ and $\lVert\boldsymbol{\omega}_t\rVert$ constant | the $\boldsymbol{\omega}\times\mathbf{J}\boldsymbol{\omega}$ term, quantitatively |
-| V-EOM-05 | Torque-free asymmetric | $J_x < J_y < J_z$, all distinct | no closed form; **invariants** $\lVert\mathbf{h}\rVert$ and $T=\frac{1}{2}\boldsymbol{\omega}\!\cdot\!\mathbf{J}\boldsymbol{\omega}$ conserved. Qualitatively: intermediate-axis instability | products of inertia, full tensor handling |
-| V-EOM-06 | **Tsiolkovsky** | straight line, no gravity, no aero, constant $\mathbf{c}$ and $\dot m$ | $\Delta v = \lVert\mathbf{c}\rVert \ln\!\big(m_0/m_f\big)$, exact | **the variable-mass coupling**, quantitatively |
-| V-EOM-07 | Thrust offset from CM | $\mathbf{M}_{\text{prop}} = \mathbf{r}\times\mathbf{F}_{\text{prop}}$ | angular acceleration $= \mathbf{J}^{-1}\mathbf{M}$ at $t=0$ | moment transfer, CM referencing |
-| **V-EOM-09** | **Variable-mass torque-free spin** | axisymmetric, uniform depletion, $\mathbf{M}=0$, $\boldsymbol{\omega}_0$ on the symmetry axis | $\omega_z$ **constant** (hand-computed) | **the variable-mass rotational equation.** Added by the audit |
-| V-EOM-08 | Dimensional consistency | symbolic audit of every term | every term in $\dot{\mathbf{v}}$ is m·s⁻², every term in $\dot{\boldsymbol{\omega}}$ is rad·s⁻² | unit errors |
+| ID | Case | Configuration | Closed-form reference | Isolates | Status (ADR-0010) |
+|---|---|---|---|---|---|
+| V-EOM-01 | Force-free translation | $\mathbf{F}=0$, $g=0$ | $\mathbf{p}(t) = \mathbf{p}_0 + \mathbf{v}_0 t$ | integrator, position/velocity coupling | **Verification anchor established** (frozen oracle, `tests/test_eom_anchors.py`); not yet implemented |
+| V-EOM-02 | Constant gravity | $g = g_0$, no aero, no thrust | parabola, exact | gravity sign and magnitude | **Verification anchor established** (frozen oracle, `tests/test_eom_anchors.py`); not yet implemented |
+| V-EOM-03 | Constant non-zero body force at a fixed attitude | $\mathbf{F}^{B}\neq0$ constant, $g=0$, attitude a fixed parameter of the case, not a state | $\mathbf{a}^{I}=\frac{1}{m}\mathbf{T}_{IB}\mathbf{F}^{B}$; $\mathbf{v}(t)=\mathbf{v}_0+\mathbf{a}^{I}t$; $\mathbf{p}(t)=\mathbf{p}_0+\mathbf{v}_0t+\frac12\mathbf{a}^{I}t^2$ | the $\mathbf{T}_{IB}$ force path | **Verification anchor established** (frozen oracle, `tests/test_eom_anchors.py`); not yet implemented |
+| V-EOM-10 | Torque-free, constant rate about a principal axis — *listed as V-EOM-03 until 2026-09-11* | $\mathbf{M}=0$, $\boldsymbol{\omega}_0 \parallel$ principal axis | $\boldsymbol{\omega}$ constant; $q(t)$ closed form | quaternion kinematics, gyroscopic term vanishing correctly | **Planned** — never frozen |
+| V-EOM-04 | Torque-free axisymmetric coning | $J_\parallel \ne J_\perp$, $\boldsymbol{\omega}_0$ with non-zero transverse part. Frozen in two forms: RADIUS body axes (symmetry axis $x_B$) and the canonical frame $P$ (symmetry axis $z_P$), NOTATION §5.1 | the transverse $\boldsymbol{\omega}$ rotates relative to the body, about the positive symmetry axis, at $\lambda = \frac{J_\parallel - J_\perp}{J_\perp}\,\omega_\parallel$; $\omega_\parallel$ and $\lVert\boldsymbol{\omega}_\perp\rVert$ constant. In $B$: $\dot q = -\lambda r$, $\dot r = \lambda q$, $\omega_\parallel = p$ | the $\boldsymbol{\omega}\times\mathbf{J}\boldsymbol{\omega}$ term, quantitatively | **Verification anchor established** (frozen oracle, `tests/test_eom_anchors.py`); not yet implemented |
+| V-EOM-05 | Torque-free asymmetric | principal moments $J_{xx} < J_{yy} < J_{zz}$, all distinct | no closed form; **invariants** $\lVert\mathbf{h}\rVert$ and $T=\frac{1}{2}\boldsymbol{\omega}\!\cdot\!\mathbf{J}\boldsymbol{\omega}$ conserved. Qualitatively: intermediate-axis instability | products of inertia, full tensor handling | **Planned** |
+| V-EOM-06 | **Tsiolkovsky** | straight line, no gravity, no aero, constant $\mathbf{c}$ and $\dot m$ | $\Delta v = \lVert\mathbf{c}\rVert \ln\!\big(m_0/m_f\big)$, exact | **the variable-mass coupling**, quantitatively | **Planned** |
+| V-EOM-07 | Thrust offset from CM | $\mathbf{M}_{\text{prop}} = \mathbf{r}\times\mathbf{F}_{\text{prop}}$ | angular acceleration $= \mathbf{J}^{-1}\mathbf{M}$ at $t=0$ | moment transfer, CM referencing | **Planned** |
+| **V-EOM-09** | **Variable-mass torque-free spin** | axisymmetric, uniform depletion, $\mathbf{M}=0$, $\boldsymbol{\omega}_0$ along the symmetry axis ($x_B$) | $\omega_\parallel$ — the roll rate $p$ — **constant** (hand-computed) | **the variable-mass rotational equation.** Added by the audit | **Planned** |
+| V-EOM-08 | Dimensional consistency | symbolic audit of every term | every term in $\dot{\mathbf{v}}$ is m·s⁻², every term in $\dot{\boldsymbol{\omega}}$ is rad·s⁻² | unit errors | **Planned** |
+
+**Identifier history (ADR-0010).** Until 2026-09-11 this table listed *torque-free, constant rate
+about a principal axis* as **V-EOM-03**. That case was never frozen and never tested. On 2026-09-10
+the identifier V-EOM-03 was assigned to the frozen body-force anchor. An identifier names exactly one
+claim and a frozen anchor is never renumbered, so the planned case is now **V-EOM-10**, unchanged in
+content. Rows stay ordered by prerequisite, not by number. The V-EOM-04 entry was first written as
+$J_x = J_y = J_t \ne J_z$ with $\lambda = \frac{J_z - J_t}{J_t}\omega_z$ — symmetry about $z$ — and is
+restated above in the notation of ADR-0010; the frozen values did not change.
 
 **V-EOM-09 exists because of a gate failure.** Every rotational test in the original suite ran at
 constant mass, so the variable-mass rotational equation was exercised by nothing at all — which is how

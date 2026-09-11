@@ -21,3 +21,4 @@ a new ADR that says so, and the original stays.
 | [ADR-0007](ADR-0007-licensing-deferred.md) | No licence at this stage | Accepted | 2026-09-09 |
 | [ADR-0008](ADR-0008-publication-architecture.md) | Publication architecture and data governance | Accepted | 2026-09-09 |
 | [ADR-0009](ADR-0009-variable-mass-rotational-equation.md) | Variable-mass rotational equation: the inertia-rate term is removed | Accepted | 2026-09-09 |
+| [ADR-0010](ADR-0010-dynamics-specification-conventions.md) | Dynamics specification conventions: verification-ID ownership, symmetry axis, axisymmetric inertia notation, status vocabulary | Accepted | 2026-09-11 |

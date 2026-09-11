@@ -337,3 +337,63 @@ another.
 **NEXT STEP.** Phase 2 — `radius/math/` and `radius/frames/`, beginning with the hand-computed
 convention tests. Q8 (aerodynamic coefficients) remains NOT PASS; the audit deliberately did not close
 it by inventing data.
+
+---
+
+## 2026-09-11 · RL-0013 — Dynamics conventions reconciled before any rotational code
+
+**DECISION.** ADR-0010:
+
+1. V-EOM-03 remains the frozen body-force anchor. The never-frozen principal-axis case once listed
+   under that number is renumbered V-EOM-10.
+2. The symmetry axis of an axisymmetric RADIUS vehicle is $x_B$.
+3. Axisymmetric moments are $J_\parallel$ and $J_\perp$, and the body-frame transverse rate is
+   $\lambda = \frac{J_\parallel-J_\perp}{J_\perp}\omega_\parallel$; $J_t$ and $J_z$ are retired.
+4. A $z$-symmetric labelling survives only as the named, analysis-only canonical principal frame $P$,
+   mapped to $B$ by $x_P=y_B$, $y_P=z_B$, $z_P=x_B$.
+5. Status words have defined meanings, and **Implemented** requires production code that passes named
+   tests.
+
+**RATIONALE.** Each defect was harmless on paper and expensive in code:
+
+- **Identifier.** An identifier naming two claims breaks the chain from requirement to test.
+- **Symmetry axis.** The rotational specification put the symmetry axis on $z$, while the
+  specification's own rates, moment signs, aerodynamic channels, exhaust direction and pitch inertia
+  $J_{yy}$ all treat $x_B$ as the vehicle axis. That would have reached a mass-property input as a
+  silent axis swap. $J_z$ would also have been read as $J_{zz}$, a transverse moment on this vehicle.
+- **Status.** "Implemented" with no code behind it is the kind of maturity misstatement the
+  publication policy forbids.
+
+The axis was decided on the specification's own evidence, not on which choice needed fewer edits.
+The $z$-symmetric form was kept, named, because the frozen oracle is correct as mathematics and its
+two forms together catch a hard-coded axis.
+
+**EVIDENCE.** `CALCULATION`, 2026-09-11, in exact rational arithmetic:
+
+- The body-axis Euler equations for $\mathbf{J}^B=\mathrm{diag}(J_\parallel,J_\perp,J_\perp)$ with
+  moments, and the frame-$P$ form, agree with
+  $\mathbf{J}\dot{\boldsymbol\omega}+\boldsymbol\omega\times(\mathbf{J}\boldsymbol\omega)=\mathbf{M}$ over
+  1000 random cases.
+- The $P\to B$ mapping has determinant $+1$ and carries torque-free solutions to torque-free solutions.
+
+The V-EOM-04 identifier rename was checked three ways:
+
+- the syntax tree is identical once renames are reversed and strings blanked;
+- numeric literals, assertion calls and test methods are unchanged (713, 144, 63);
+- the mutation harness, re-run, gives the same failure count for every one of its 20 runs.
+
+**IMPACT.**
+
+- **Synchronised:** RS-004 (§2, §4.2, §4.3, §7), RS-008 (V-VM-10), NOTATION (§3 pointer, new §5.1, a
+  §8 naming rule), the V&V record (V-EOM-04 findings marked resolved), ARCHITECTURE §6, the ADR index
+  and the V-EOM-04 test identifiers.
+- **Unchanged:** no frozen numerical value, and no convention of NOTATION §1–8; no reference data is
+  invalidated.
+- **Flagged, not edited:** stale *under*-claims of implementation status — README, the handoff
+  snapshot, the assumptions header and three specification headers still say no code exists, while
+  `radius/frames.py` and `radius/math/quaternion.py` do and are verified. These are left for a
+  maturity-label decision (PUBLICATION_POLICY §11).
+
+**NEXT STEP.** Researcher decision on the project maturity label, followed by correction of the stale
+status statements ADR-0010 lists, so that the public record neither over- nor under-states what
+exists before rotational dynamics code is written.

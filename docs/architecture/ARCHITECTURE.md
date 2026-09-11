@@ -121,7 +121,8 @@ future need is worth the cost, because the alternative touches the dynamics core
 
 ## 6. Flow
 
-Current, and all that is implemented through Phase 10:
+Current design — the flow planned through Phase 10. **Not yet implemented**: no dynamics,
+integrator or trajectory code exists.
 
 ```
 configuration

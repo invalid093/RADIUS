@@ -804,24 +804,52 @@ class TestVEOM03Discrimination(unittest.TestCase):
 # rotational dynamics had no verification of any kind.  V-EOM-04 anchors the gyroscopic
 # term ``w x (J w)`` quantitatively, and nothing else.
 #
+# NOTATION AND FRAMES (ADR-0010) -- READ THIS FIRST
+# -------------------------------------------------
+#   J_par  (J_PARALLEL)   principal moment about the SYMMETRY axis
+#   J_perp (J_PERP)       principal moment about any TRANSVERSE axis
+#   w_par                 component of w along the symmetry axis
+#
+# The case is frozen in two forms of the same solution:
+#
+#   * CANONICAL PRINCIPAL FRAME P, symmetry axis z_P:  J^P = diag(J_perp, J_perp, J_par).
+#     J_DIAG, OMEGA_0, OMEGA and OMEGA_DOT are components along (x_P, y_P, z_P), and
+#     ``w_x, w_y, w_z`` in this section mean those components -- NOT body axes.  P is a
+#     relabelling used for analysis only; it is not a simulation frame.
+#   * RADIUS BODY AXES B, symmetry axis x_B (NOTATION sec 5.1):
+#     J^B = diag(J_par, J_perp, J_perp) and w^B = (p, q, r).  The *_X_SYMMETRIC attributes.
+#
+#   P -> B:   x_P = y_B,   y_P = z_B,   z_P = x_B,   so  w^P = (q, r, p).
+#
+# That mapping is cyclic (determinant +1), so P is right-handed and cross products are
+# preserved.  Swapping two axes instead is a reflection: it flips the cross product, and a
+# test below shows it FAILS the Euler equations.  That is the handedness check.
+#
+# J_PARALLEL and J_PERP were named J_Z and J_T when this anchor was frozen (2026-09-10).
+# ADR-0010 renamed them because "J_z" reads as J_zz, which on a RADIUS vehicle is a
+# TRANSVERSE moment.  No value changed.  Because P's canonical oracle is also a legitimate
+# body-frame input for a body whose symmetry axis happens to be z_B, a full-tensor
+# implementation must pass both forms unchanged.
+#
 # GOVERNING EQUATION (RS-004 sec 4.1, ADR-0009) at constant inertia and zero moment:
 #
-#     J wdot + w x (J w) = 0,        w = omega^B_{B/I} = (p, q, r)   (NOTATION sec 5)
+#     J wdot + w x (J w) = 0         (skew form of NOTATION sec 5)
 #
-# DERIVATION -- performed here, not inherited
-# -------------------------------------------
-# With J = diag(J_t, J_t, J_z), J w = (J_t w_x, J_t w_y, J_z w_z).  Using the skew form
-# [w x] = [[0, -r, q], [r, 0, -p], [-q, p, 0]] from NOTATION sec 5:
+# DERIVATION -- performed here, not inherited, in frame P
+# -------------------------------------------------------
+# With J = diag(J_perp, J_perp, J_par), J w = (J_perp w_x, J_perp w_y, J_par w_z), and
 #
-#     w x (J w) = ( (J_z - J_t) w_y w_z,  -(J_z - J_t) w_x w_z,  0 )
+#     w x (J w) = ( (J_par - J_perp) w_y w_z,  -(J_par - J_perp) w_x w_z,  0 )
 #
-# so the three body-axis Euler equations are
+# so the three Euler equations are
 #
-#     J_t wdot_x + (J_z - J_t) w_y w_z = 0     =>   wdot_x = -lambda w_y
-#     J_t wdot_y - (J_z - J_t) w_x w_z = 0     =>   wdot_y = +lambda w_x
-#     J_z wdot_z                       = 0     =>   w_z is constant
+#     J_perp wdot_x + (J_par - J_perp) w_y w_z = 0    =>   wdot_x = -lambda w_y
+#     J_perp wdot_y - (J_par - J_perp) w_x w_z = 0    =>   wdot_y = +lambda w_x
+#     J_par  wdot_z                            = 0    =>   w_z = w_par is constant
 #
-#     lambda = ((J_z - J_t) / J_t) w_z         constant, because w_z is.
+#     lambda = ((J_par - J_perp) / J_perp) w_par      constant, because w_par is.
+#
+# In body axes B the same solution reads  qdot = -lambda r,  rdot = +lambda q,  w_par = p.
 #
 # Component solution (differentiate to check: it satisfies both transverse equations):
 #
@@ -838,38 +866,36 @@ class TestVEOM03Discrimination(unittest.TestCase):
 # "Coning rate" is used for at least three different quantities.  This file keeps them
 # apart:
 #
-#   lambda  = ((J_z - J_t)/J_t) w_z   the rate at which the transverse angular-velocity
-#                                     vector rotates RELATIVE TO THE BODY AXES, signed by
-#                                     the right-hand rule about +z_B (positive: from +x_B
-#                                     toward +y_B).  THIS is what V-EOM-04 verifies.
+#   lambda  = ((J_par-J_perp)/J_perp) w_par   the rate at which the transverse angular-
+#                                     velocity vector rotates RELATIVE TO THE BODY, signed
+#                                     by the right-hand rule about the POSITIVE SYMMETRY
+#                                     AXIS (+z_P here: from +x_P toward +y_P; on a RADIUS
+#                                     vehicle +x_B: from +y_B toward +z_B).  THIS is what
+#                                     V-EOM-04 verifies.
 #   sigma   = -lambda                 the rate at which the BODY rotates relative to the
-#                                     plane containing H and z_B.  Same magnitude,
-#                                     opposite sign: a "sign disagreement" between two
-#                                     statements can be nothing more than this change of
-#                                     reference.
-#   |H|/J_t                           the rate at which z_B precesses about the inertially
-#                                     fixed angular momentum H, seen from INERTIAL space.
-#                                     A different magnitude.  Not observable without
-#                                     attitude propagation, and NOT verified here.
+#                                     plane containing H and the symmetry axis.  Same
+#                                     magnitude, opposite sign: a "sign disagreement"
+#                                     between two statements can be nothing more than this
+#                                     change of reference.
+#   |H|/J_perp                        the rate at which the symmetry axis precesses about
+#                                     the inertially fixed angular momentum H, seen from
+#                                     INERTIAL space.  A different magnitude.  Not
+#                                     observable without attitude propagation, and NOT
+#                                     verified here.
 #
-# They are linked by the exact decomposition  w = H/J_t + sigma zhat_B  (tested below).
+# They are linked by the exact decomposition  w = H/J_perp + sigma * (unit symmetry axis),
+# tested below.
 #
-# The formula carried by RS-004 sec 7, lambda = ((J_z - J_t)/J_t) w_z, is CORRECT in
-# magnitude and sign for the first quantity.  It was incomplete as written: it did not
-# state the sign reference, did not say it is a body-frame rate, and assumes a symmetry
-# axis of z -- see the next paragraph.
-#
-# AXIS LABELLING -- A CONVENTION MISMATCH FOUND WHILE BUILDING THIS ANCHOR
-# ------------------------------------------------------------------------
-# RS-004 sec 7 specifies V-EOM-04 with J_x = J_y = J_t != J_z, i.e. symmetry about z.
-# NOTATION sec 3 puts x_B along the vehicle LONGITUDINAL axis, so a RADIUS vehicle is
-# axisymmetric about x_B, with J_y = J_z.  The z-symmetric case is still a valid test of
-# J wdot + w x (J w) = 0 -- the equation does not care which axis is special -- and it is
-# frozen here as specified.  The x_B-symmetric form a RADIUS vehicle will actually have is
-# frozen alongside it, obtained by the CYCLIC relabelling (x, y, z) -> (y, z, x), which is
-# a proper rotation (det +1) and therefore preserves the cross product.  Swapping two
-# axes instead is a reflection (det -1): it flips the cross product, and is shown to FAIL.
-# That is the handedness check.
+# HISTORY -- THE FORMULA AND THE AXIS AS FIRST SPECIFIED
+# ------------------------------------------------------
+# Before ADR-0010, RS-004 sec 7 wrote this case as J_x = J_y = J_t != J_z with
+# lambda = ((J_z - J_t)/J_t) w_z, i.e. symmetry about z.  Building this anchor found that
+# formula CORRECT in magnitude and sign for the body-frame rate, but incomplete: no sign
+# reference, not distinguished from the inertial rate, and tied to a symmetry axis of z.
+# It also found that NOTATION sec 3 puts x_B, not z_B, along the vehicle's longitudinal
+# axis.  ADR-0010 resolved both: the physical symmetry axis is x_B, and the z-symmetric
+# form is the canonical frame P.  Both forms were frozen from the start; only their names
+# and this commentary changed.
 #
 # SCOPE.  This is an angular-velocity anchor only.  No quaternion, attitude, integrator or
 # time-stepping appears.  It does not verify attitude propagation, numerical integration,
@@ -880,7 +906,6 @@ class TestVEOM03Discrimination(unittest.TestCase):
 # integrate numerically, so its comparison tolerance has to come from a measured
 # convergence study (RS-005, V-NUM-01) in the phase that builds it.  No number is set here.
 # ======================================================================================
-
 
 def _skew_cross(w, b):
     """``w x b`` computed as ``[w x] b``, with ``[w x]`` transcribed from NOTATION sec 5."""
@@ -930,33 +955,37 @@ def _closed_form_transverse(w_x0, w_y0, cos_sin):
 class VEOM04TorqueFreeAxisymmetricConing:
     """V-EOM-04 — torque-free axisymmetric coning. Frozen oracle.
 
+    FRAMES.  J_DIAG, OMEGA_0, OMEGA and OMEGA_DOT are components in the canonical
+    principal frame P (symmetry axis z_P; ADR-0010).  The *_X_SYMMETRIC attributes are the
+    same case in RADIUS body axes, symmetry axis x_B.
+
     CASE SELECTION — CHOSEN BY ANALYSIS, NOT ASSUMED
     ------------------------------------------------
     Ten candidate constructions were scored, in exact arithmetic, against 26 mutations
     before this one was fixed.  Each rejected construction silently voids at least one:
 
-    * ``J_z = J_t`` (spherical): lambda = 0; eleven mutations become invisible, including
+    * ``J_par = J_perp`` (spherical): lambda = 0; eleven mutations become invisible, including
       the sign reversal and frozen transverse components.
     * ``w_x0 = w_y0 = 0``: every transverse mutation becomes invisible (21 of 26).
-    * ``J_z/J_t = 1/2``: ``(J_z/J_t - 1) = -(J_z/J_t)``, so the wrong formula
-      ``-(J_z/J_t) w_z`` -- a sign-slipped small-nutation INERTIAL precession rate --
+    * ``J_par/J_perp = 1/2``: ``(J_par/J_perp - 1) = -(J_par/J_perp)``, so the wrong formula
+      ``-(J_par/J_perp) w_z`` -- a sign-slipped small-nutation INERTIAL precession rate --
       reproduces lambda exactly.  Of the three rates above, that confusion is the one most
       worth catching.
-    * ``J_z/J_t = 2``: ``(J_z - J_t)/J_t = 1``, so omitting the ratio is invisible.
-    * ``J_t = 1``: omitting the division by ``J_t`` is invisible.
+    * ``J_par/J_perp = 2``: ``(J_par - J_perp)/J_perp = 1``, so omitting the ratio is invisible.
+    * ``J_perp = 1``: omitting the division by ``J_perp`` is invisible.
     * ``w_z = 1``: omitting ``w_z`` from lambda is invisible.
     * ``w_x0 = 0``: a symmetrically (wrongly) coupled solution is invisible.
     * ``w_x0 = w_y0``: swapping the transverse components is invisible at t = 0.
 
-    Hence a prolate body (J_z < J_t, as a slender vehicle is) with ``J_z/J_t = 1/3``,
+    Hence a prolate body (J_par < J_perp, as a slender vehicle is) with ``J_par/J_perp = 1/3``,
     neither moment equal to 1, ``w_z = 3``, and transverse components that are non-zero,
     unequal in magnitude and of opposite sign.
 
-        J_t = 6 kg m^2,  J_z = 2 kg m^2,  w0 = (2, -5, 3) rad/s
+        J_perp = 6 kg m^2,  J_par = 2 kg m^2,  w0 = (2, -5, 3) rad/s
         lambda = ((2 - 6)/6)(3) = -2 rad/s
 
     lambda < 0: for a prolate body spinning positively, the transverse rate REGRESSES,
-    rotating clockwise about +z_B as seen relative to the body.
+    rotating clockwise about +z_P (about +x_B in body axes) as seen relative to the body.
 
     SAMPLE TIMES — WHY FOUR, AND WHY ONE IS NOT A MULTIPLE OF PI
     -------------------------------------------------------------
@@ -965,7 +994,7 @@ class VEOM04TorqueFreeAxisymmetricConing:
 
     Quarter- and half-cycle samples alone are NOT enough.  A rate ``lambda' = -3 lambda``
     lands on the same point as ``lambda`` at every multiple of pi/2, and that is exactly
-    the mutation ``(J_t - J_z)/J_z w_z`` (both numerator and denominator wrong).  The
+    the mutation ``(J_perp - J_par)/J_par w_z`` (both numerator and denominator wrong).  The
     half-cycle sample is also blind to a plain sign reversal, since exp(i pi) =
     exp(-i pi).  ``atan(3/4)`` is incommensurate with pi, so no integer multiple of lambda
     other than lambda itself reaches the same point there.  The last phase is exact by the
@@ -987,18 +1016,18 @@ class VEOM04TorqueFreeAxisymmetricConing:
         wdot = (-lambda w_y, lambda w_x, 0) = (2 w_y, -2 w_x, 0) at every sample.
 
     Invariants at every sample: |w_t|^2 = 29, |H|^2 = 1080, 2T = w.Jw = 192.
-    (|H|/J_t)^2 = 30, which is NOT lambda^2 = 4: the inertial precession rate and the
+    (|H|/J_perp)^2 = 30, which is NOT lambda^2 = 4: the inertial precession rate and the
     body-frame transverse rate genuinely differ for this case, so confusing them is caught.
 
     Units: rad/s, rad/s^2, kg m^2.  A verification case, not a vehicle: the nutation is
     large (|w_t| > w_z) because that maximises the transverse discrimination margins.
     """
 
-    J_T = Fraction(6)                   # kg m^2, J_x = J_y
-    J_Z = Fraction(2)                   # kg m^2, symmetry axis z_B; NOT J_t/2, NOT 2 J_t
-    J_DIAG = (J_T, J_T, J_Z)
-    OMEGA_0 = _v(2, -5, 3)              # rad/s, body axes; w_z != 1
-    LAMBDA = Fraction(-2)               # rad/s = ((J_z - J_t)/J_t) w_z
+    J_PERP = Fraction(6)                # kg m^2, transverse moment (about x_P and y_P)
+    J_PARALLEL = Fraction(2)            # kg m^2, symmetry axis z_P; NOT J_perp/2, NOT 2 J_perp
+    J_DIAG = (J_PERP, J_PERP, J_PARALLEL)       # frame P
+    OMEGA_0 = _v(2, -5, 3)              # rad/s, frame P; w_par = w_z != 1
+    LAMBDA = Fraction(-2)               # rad/s = ((J_par - J_perp)/J_perp) w_par
 
     # Sample times in seconds, symbolic: exact phases exist; exact times do not.
     SAMPLE_TIMES_S = ("0", "pi/4", "pi/2", "atan(3/4)")
@@ -1019,11 +1048,11 @@ class VEOM04TorqueFreeAxisymmetricConing:
     TRANSVERSE_RATE_SQ = Fraction(29)            # (rad/s)^2
     ANGULAR_MOMENTUM_SQ = Fraction(1080)         # (kg m^2 rad/s)^2
     TWICE_KINETIC_ENERGY = Fraction(192)         # kg m^2 (rad/s)^2
-    INERTIAL_PRECESSION_RATE_SQ = Fraction(30)   # (|H|/J_t)^2 -- NOT lambda^2
+    INERTIAL_PRECESSION_RATE_SQ = Fraction(30)   # (|H|/J_perp)^2 -- NOT lambda^2
 
-    # RADIUS-native labelling (NOTATION sec 3): symmetry about x_B, J_y = J_z = J_t.
-    # Cyclic relabelling of the case above: new (x, y, z) = old (z, x, y).
-    J_DIAG_X_SYMMETRIC = (J_Z, J_T, J_T)
+    # RADIUS body axes (NOTATION sec 5.1): symmetry axis x_B, J_xx = J_par, J_yy = J_zz = J_perp.
+    # P -> B: x_P = y_B, y_P = z_B, z_P = x_B, so (p, q, r) = (w_zP, w_xP, w_yP).
+    J_DIAG_X_SYMMETRIC = (J_PARALLEL, J_PERP, J_PERP)
     OMEGA_X_SYMMETRIC = (_v(3, 2, -5),
                          _v(3, -5, -2),
                          _v(3, -2, 5),
@@ -1049,23 +1078,23 @@ class TestVEOM04AnchorIntegrity(unittest.TestCase):
     C = VEOM04TorqueFreeAxisymmetricConing
 
     def test_v_eom_04_gyroscopic_term_expands_to_the_derived_components(self):
-        """Derivation step 1, executed: w x (J w) for J = diag(J_t, J_t, J_z)."""
+        """Derivation step 1, executed: w x (J w) for J = diag(J_perp, J_perp, J_par)."""
         c = self.C
         probes = list(c.OMEGA) + [_v(7, 11, -13),
                                   (Fraction(1, 3), Fraction(-2, 7), Fraction(5, 2))]
-        for j_t, j_z in ((c.J_T, c.J_Z), (Fraction(9, 2), Fraction(11, 3))):
+        for j_perp, j_par in ((c.J_PERP, c.J_PARALLEL), (Fraction(9, 2), Fraction(11, 3))):
             for w in probes:
-                with self.subTest(j_t=j_t, j_z=j_z, omega=w):
+                with self.subTest(j_perp=j_perp, j_par=j_par, omega=w):
                     self.assertEqual(
-                        _skew_cross(w, _diag_times((j_t, j_t, j_z), w)),
-                        ((j_z - j_t) * w[1] * w[2], -(j_z - j_t) * w[0] * w[2], 0),
+                        _skew_cross(w, _diag_times((j_perp, j_perp, j_par), w)),
+                        ((j_par - j_perp) * w[1] * w[2], -(j_par - j_perp) * w[0] * w[2], 0),
                         "V-EOM-04: the gyroscopic term must expand to "
-                        "((J_z-J_t) w_y w_z, -(J_z-J_t) w_x w_z, 0).")
+                        "((J_par-J_perp) w_y w_z, -(J_par-J_perp) w_x w_z, 0).")
 
     def test_v_eom_04_lambda_literal_follows_from_inertia_and_spin(self):
         c = self.C
-        self.assertEqual((c.J_Z - c.J_T) / c.J_T * c.OMEGA_0[2], c.LAMBDA,
-                         "V-EOM-04: lambda = ((J_z - J_t)/J_t) w_z must equal -2 rad/s.")
+        self.assertEqual((c.J_PARALLEL - c.J_PERP) / c.J_PERP * c.OMEGA_0[2], c.LAMBDA,
+                         "V-EOM-04: lambda = ((J_par - J_perp)/J_perp) w_z must equal -2 rad/s.")
         self.assertEqual(c.OMEGA[0], c.OMEGA_0)
 
     def test_v_eom_04_sample_phases_are_exact(self):
@@ -1145,15 +1174,15 @@ class TestVEOM04AnchorIntegrity(unittest.TestCase):
     def test_v_eom_04_transverse_rate_regresses_relative_to_the_body(self):
         """Rotation sense, as a sign: z-component of w_t(0) x w_t(pi/4).
 
-        It equals sin(lambda t) |w_t|^2 = -29 < 0, i.e. rotation about -z_B relative to
-        the body.  A prolate body (J_z < J_t) with w_z > 0 must regress.
+        It equals sin(lambda t) |w_t|^2 = -29 < 0, i.e. rotation about -z_P (-x_B in body
+        axes) relative to the body.  A prolate body (J_par < J_perp) with w_z > 0 must regress.
         """
         c = self.C
         w0, w1 = c.OMEGA[0], c.OMEGA[1]
         z_cross = w0[0] * w1[1] - w0[1] * w1[0]
         self.assertEqual(z_cross, c.COS_SIN[1][1] * c.TRANSVERSE_RATE_SQ)
         self.assertEqual(z_cross, -29)
-        self.assertLess(c.J_Z, c.J_T)
+        self.assertLess(c.J_PARALLEL, c.J_PERP)
         self.assertGreater(c.OMEGA_0[2], 0)
 
     def test_v_eom_04_angular_momentum_magnitude_and_kinetic_energy_are_conserved(self):
@@ -1166,21 +1195,22 @@ class TestVEOM04AnchorIntegrity(unittest.TestCase):
                                  c.TWICE_KINETIC_ENERGY)
 
     def test_v_eom_04_body_rate_splits_into_inertial_precession_and_relative_spin(self):
-        """w = H/J_t + sigma zhat_B with sigma = -lambda: the three rates, kept apart."""
+        """w = H/J_perp + sigma zhat_P with sigma = -lambda: the three rates, kept apart."""
         c = self.C
         sigma = -c.LAMBDA
         for k in range(4):
             h = _diag_times(c.J_DIAG, c.OMEGA[k])
             with self.subTest(sample=c.SAMPLE_TIMES_S[k]):
                 self.assertEqual(c.OMEGA[k],
-                                 _add(_scale(Fraction(1) / c.J_T, h), (0, 0, sigma)))
-        self.assertEqual(c.ANGULAR_MOMENTUM_SQ / c.J_T ** 2, c.INERTIAL_PRECESSION_RATE_SQ)
+                                 _add(_scale(Fraction(1) / c.J_PERP, h), (0, 0, sigma)))
+        self.assertEqual(c.ANGULAR_MOMENTUM_SQ / c.J_PERP ** 2, c.INERTIAL_PRECESSION_RATE_SQ)
         self.assertNotEqual(c.INERTIAL_PRECESSION_RATE_SQ, c.LAMBDA ** 2,
                             "the inertial precession rate must differ from |lambda| here")
 
     def test_v_eom_04_x_body_symmetric_form_is_the_cyclic_relabelling(self):
-        """RADIUS vehicles are symmetric about x_B.  The cyclic relabelling is a proper
-        rotation, so it must carry the solution to a solution with the SAME lambda."""
+        """RADIUS vehicles are symmetric about x_B (ADR-0010).  The cyclic relabelling P -> B
+        is a proper rotation, so it must carry the solution to a solution with the SAME
+        lambda."""
         c = self.C
         for k in range(4):
             w, w_dot = c.OMEGA[k], c.OMEGA_DOT[k]
@@ -1190,8 +1220,8 @@ class TestVEOM04AnchorIntegrity(unittest.TestCase):
                 self.assertEqual(
                     _torque_free_residual(c.J_DIAG_X_SYMMETRIC, c.OMEGA_X_SYMMETRIC[k],
                                           c.OMEGA_DOT_X_SYMMETRIC[k]), (0, 0, 0))
-        j_axial, j_t = c.J_DIAG_X_SYMMETRIC[0], c.J_DIAG_X_SYMMETRIC[1]
-        self.assertEqual((j_axial - j_t) / j_t * c.OMEGA_X_SYMMETRIC[0][0], c.LAMBDA)
+        j_axial, j_perp = c.J_DIAG_X_SYMMETRIC[0], c.J_DIAG_X_SYMMETRIC[1]
+        self.assertEqual((j_axial - j_perp) / j_perp * c.OMEGA_X_SYMMETRIC[0][0], c.LAMBDA)
 
     def test_v_eom_04_anchor_rejects_a_deliberately_incorrect_oracle(self):
         """Required integrity check: the oracle tests must be capable of failing."""
@@ -1202,7 +1232,7 @@ class TestVEOM04AnchorIntegrity(unittest.TestCase):
         self.assertNotEqual(
             _torque_free_residual(c.J_DIAG, c.OMEGA[1], _scale(-1, c.OMEGA_DOT[1])),
             (0, 0, 0), "a sign-reversed wdot must not satisfy the Euler equations")
-        self.assertNotEqual((c.J_Z - c.J_T) / c.J_T * c.OMEGA_0[2], -c.LAMBDA)
+        self.assertNotEqual((c.J_PARALLEL - c.J_PERP) / c.J_PERP * c.OMEGA_0[2], -c.LAMBDA)
         self.assertNotEqual(
             c.OMEGA[3][0] ** 2 + c.OMEGA[3][1] ** 2 + Fraction(1, 25),
             c.TRANSVERSE_RATE_SQ)
@@ -1211,15 +1241,15 @@ class TestVEOM04AnchorIntegrity(unittest.TestCase):
         """Guards the anchor's discriminating power against a later 'tidy-up'."""
         c = self.C
         w_x0, w_y0, w_z = c.OMEGA_0
-        self.assertNotEqual(c.J_Z, c.J_T, "spherical body: lambda = 0")
+        self.assertNotEqual(c.J_PARALLEL, c.J_PERP, "spherical body: lambda = 0")
         self.assertNotEqual(c.LAMBDA, 0)
         self.assertNotEqual(w_x0, 0, "w_x0 = 0 hides a symmetric-coupling error")
         self.assertNotEqual(w_y0, 0, "zero transverse rate hides every transverse error")
         self.assertNotEqual(abs(w_x0), abs(w_y0), "equal components hide a swap at t = 0")
-        self.assertNotEqual(c.J_T, 1, "J_t = 1 hides a missing division by J_t")
+        self.assertNotEqual(c.J_PERP, 1, "J_perp = 1 hides a missing division by J_perp")
         self.assertNotIn(w_z, (0, 1, -1), "w_z = 1 hides a missing w_z factor")
-        self.assertNotIn(c.J_Z / c.J_T, (Fraction(1, 2), Fraction(2)),
-                         "J_z/J_t = 1/2 or 2 makes a wrong formula coincide with lambda")
+        self.assertNotIn(c.J_PARALLEL / c.J_PERP, (Fraction(1, 2), Fraction(2)),
+                         "J_par/J_perp = 1/2 or 2 makes a wrong formula coincide with lambda")
         for k in range(4):
             with self.subTest(sample=c.SAMPLE_TIMES_S[k]):
                 self.assertNotIn(0, c.OMEGA[k][:2],
@@ -1227,16 +1257,16 @@ class TestVEOM04AnchorIntegrity(unittest.TestCase):
 
     def test_v_eom_04_rejected_constructions_really_void_a_mutation(self):
         """Each rejected construction, demonstrated rather than asserted."""
-        def lam(j_t, j_z, w_z):
-            return (j_z - j_t) / j_t * w_z
+        def lam(j_perp, j_par, w_z):
+            return (j_par - j_perp) / j_perp * w_z
 
         F = Fraction
         self.assertEqual(-(F(3) / F(6)) * F(4), lam(F(6), F(3), F(4)),
-                         "J_z/J_t = 1/2: -(J_z/J_t) w_z coincides with lambda")
+                         "J_par/J_perp = 1/2: -(J_par/J_perp) w_z coincides with lambda")
         self.assertEqual(F(-2), lam(F(3), F(6), F(-2)),
-                         "J_z/J_t = 2: w_z alone coincides with lambda")
+                         "J_par/J_perp = 2: w_z alone coincides with lambda")
         self.assertEqual((F(1, 3) - F(1)) * F(3), lam(F(1), F(1, 3), F(3)),
-                         "J_t = 1: omitting the division by J_t is invisible")
+                         "J_perp = 1: omitting the division by J_perp is invisible")
         self.assertEqual((F(6) - F(2)) / F(2), lam(F(2), F(6), F(1)),
                          "w_z = 1: omitting w_z is invisible")
         w_y0 = F(-5)
@@ -1247,8 +1277,8 @@ class TestVEOM04AnchorIntegrity(unittest.TestCase):
                              "w_x0 = 0: a symmetrically coupled solution is invisible")
         # ...and none of them coincide for the case actually frozen.
         c = self.C
-        j_t, j_z, w_z = c.J_T, c.J_Z, c.OMEGA_0[2]
-        for wrong in (-(j_z / j_t) * w_z, w_z, (j_z - j_t) * w_z, (j_z - j_t) / j_t):
+        j_perp, j_par, w_z = c.J_PERP, c.J_PARALLEL, c.OMEGA_0[2]
+        for wrong in (-(j_par / j_perp) * w_z, w_z, (j_par - j_perp) * w_z, (j_par - j_perp) / j_perp):
             self.assertNotEqual(wrong, c.LAMBDA)
 
 
@@ -1319,56 +1349,56 @@ class TestVEOM04Discrimination(unittest.TestCase):
 
     def test_v_eom_04_mutation_b_wrong_inertia_ratio(self):
         c = self.C
-        j_t, j_z, w_z = c.J_T, c.J_Z, c.OMEGA_0[2]
-        # (J_t - J_z)/J_t: numerator reversed.  Numerically identical to mutation A.
-        self.assertEqual((j_t - j_z) / j_t * w_z, -c.LAMBDA)
-        # (J_z - J_t)/J_z: wrong denominator, lambda' = 3 lambda.
-        rate = (j_z - j_t) / j_z * w_z
+        j_perp, j_par, w_z = c.J_PERP, c.J_PARALLEL, c.OMEGA_0[2]
+        # (J_perp - J_par)/J_perp: numerator reversed.  Numerically identical to mutation A.
+        self.assertEqual((j_perp - j_par) / j_perp * w_z, -c.LAMBDA)
+        # (J_par - J_perp)/J_par: wrong denominator, lambda' = 3 lambda.
+        rate = (j_par - j_perp) / j_par * w_z
         self.assertEqual(self._margins(self._rate_model(rate)),
                          [0, 10, 0, Fraction(131232, 15625)])
         self.assertEqual(self._rate_derivative_margin(rate), 20)
-        # (J_t - J_z)/J_z: both wrong, lambda' = -3 lambda.  ALIASED: invisible at the
+        # (J_perp - J_par)/J_par: both wrong, lambda' = -3 lambda.  ALIASED: invisible at the
         # quarter AND half cycle; only atan(3/4) and the derivative catch it.
-        rate = (j_t - j_z) / j_z * w_z
+        rate = (j_perp - j_par) / j_par * w_z
         self.assertEqual(rate, -3 * c.LAMBDA)
         self.assertEqual(self._margins(self._rate_model(rate)),
                          [0, 0, 0, Fraction(90048, 15625)])
         self.assertEqual(self._rate_derivative_margin(rate), 40)
-        # (J_z + J_t)/J_t: sign slip inside the difference.
-        rate = (j_z + j_t) / j_t * w_z
+        # (J_par + J_perp)/J_perp: sign slip inside the difference.
+        rate = (j_par + j_perp) / j_perp * w_z
         self.assertEqual(self._margins(self._rate_model(rate)),
                          [0, 7, 10, Fraction(5382, 625)])
         self.assertEqual(self._rate_derivative_margin(rate), 30)
 
     def test_v_eom_04_mutation_b_inertial_precession_rate_used_as_body_rate(self):
         c = self.C
-        j_t, j_z, w_z = c.J_T, c.J_Z, c.OMEGA_0[2]
-        # Small-nutation inertial precession (J_z/J_t) w_z, with either sign.
-        self.assertEqual(self._margins(self._rate_model(j_z / j_t * w_z)),
+        j_perp, j_par, w_z = c.J_PERP, c.J_PARALLEL, c.OMEGA_0[2]
+        # Small-nutation inertial precession (J_par/J_perp) w_z, with either sign.
+        self.assertEqual(self._margins(self._rate_model(j_par / j_perp * w_z)),
                          [0, None, 7, Fraction(221, 25)])
-        self.assertEqual(self._rate_derivative_margin(j_z / j_t * w_z), 15)
-        self.assertEqual(self._margins(self._rate_model(-j_z / j_t * w_z)),
+        self.assertEqual(self._rate_derivative_margin(j_par / j_perp * w_z), 15)
+        self.assertEqual(self._margins(self._rate_model(-j_par / j_perp * w_z)),
                          [0, None, 7, Fraction(71, 25)])
-        self.assertEqual(self._rate_derivative_margin(-j_z / j_t * w_z), 5)
-        # Exact inertial precession |H|/J_t = sqrt(30) is irrational: compare |wdot(0)|^2
+        self.assertEqual(self._rate_derivative_margin(-j_par / j_perp * w_z), 5)
+        # Exact inertial precession |H|/J_perp = sqrt(30) is irrational: compare |wdot(0)|^2
         # exactly, rate^2 |w_t|^2 = 30 * 29 against the frozen 116.
         self.assertEqual(c.INERTIAL_PRECESSION_RATE_SQ * c.TRANSVERSE_RATE_SQ, 870)
         self.assertEqual(sum(x * x for x in c.OMEGA_DOT[0]), 116)
 
     def test_v_eom_04_mutation_b_missing_factor(self):
         c = self.C
-        j_t, j_z, w_z = c.J_T, c.J_Z, c.OMEGA_0[2]
+        j_perp, j_par, w_z = c.J_PERP, c.J_PARALLEL, c.OMEGA_0[2]
         # Ratio omitted: lambda' = w_z.
         self.assertEqual(self._margins(self._rate_model(w_z)),
                          [0, None, 7, Fraction(1027, 125)])
         self.assertEqual(self._rate_derivative_margin(w_z), 25)
-        # Division by J_t omitted: lambda' = (J_z - J_t) w_z = 6 lambda.
-        rate = (j_z - j_t) * w_z
+        # Division by J_perp omitted: lambda' = (J_par - J_perp) w_z = 6 lambda.
+        rate = (j_par - j_perp) * w_z
         self.assertEqual(self._margins(self._rate_model(rate)),
                          [0, 7, 10, Fraction(165884358, 244140625)])
         self.assertEqual(self._rate_derivative_margin(rate), 50)
         # w_z omitted: lambda' = -2/3.  No sample phase is exact; the derivative is.
-        rate = (j_z - j_t) / j_t
+        rate = (j_par - j_perp) / j_perp
         self.assertEqual(self._margins(self._rate_model(rate)), [0, None, None, None])
         self.assertEqual(self._rate_derivative_margin(rate), Fraction(20, 3))
 
@@ -1396,15 +1426,15 @@ class TestVEOM04Discrimination(unittest.TestCase):
                          [1, 1, 1, 1])
         # w_z0 perturbed and propagated consistently into lambda (lambda' = -8/3).
         w0_bad = (w_x0, w_y0, w_z + 1)
-        rate = (c.J_Z - c.J_T) / c.J_T * w0_bad[2]
+        rate = (c.J_PARALLEL - c.J_PERP) / c.J_PERP * w0_bad[2]
         self.assertEqual(self._margins(self._rate_model(rate, w0_bad)), [1, None, None, None])
         self.assertEqual(self._rate_derivative_margin(rate, w0_bad), Fraction(10, 3))
         # w_z made to oscillate like a transverse component.
         self.assertEqual(
             self._margins([(w[0], w[1], w_z * cs[0]) for w, cs in zip(c.OMEGA, c.COS_SIN)]),
             [0, 3, 6, Fraction(54, 25)])
-        # Wrong symmetry axis: J = diag(J_z, J_t, J_t) applied to this z-symmetric case.
-        j_wrong = (c.J_Z, c.J_T, c.J_T)
+        # Wrong symmetry axis: J = diag(J_par, J_perp, J_perp) applied to this z-symmetric case.
+        j_wrong = (c.J_PARALLEL, c.J_PERP, c.J_PERP)
         gyro = _skew_cross(c.OMEGA_0, _diag_times(j_wrong, c.OMEGA_0))
         w_dot_wrong = tuple(-g / j for g, j in zip(gyro, j_wrong))
         self.assertEqual(w_dot_wrong, (0, 4, Fraction(20, 3)))
@@ -1424,7 +1454,7 @@ class TestVEOM04Discrimination(unittest.TestCase):
     def test_v_eom_04_mutation_h_incorrect_time_dependence(self):
         c = self.C
         w_x0, w_y0, w_z = c.OMEGA_0
-        # Phase lambda t / 2.  (Numerically the same function as -(J_z/J_t) w_z here.)
+        # Phase lambda t / 2.  (Numerically the same function as -(J_par/J_perp) w_z here.)
         self.assertEqual(self._margins(self._rate_model(c.LAMBDA / 2)),
                          [0, None, 7, Fraction(71, 25)])
         # Cosine and sine exchanged in the closed form.
@@ -1447,14 +1477,14 @@ class TestVEOM04Discrimination(unittest.TestCase):
         self.assertEqual(self._margins(symmetric), [0, 4, 0, Fraction(96, 25)])
 
     def test_v_eom_04_mutation_i_spherical_body_trap(self):
-        """J_z = J_t: lambda = 0, the gyroscopic term vanishes for EVERY w, and the
+        """J_par = J_perp: lambda = 0, the gyroscopic term vanishes for EVERY w, and the
         frozen-transverse and sign-reversed mutations become the true solution."""
         c = self.C
-        lam_spherical = (c.J_T - c.J_T) / c.J_T * c.OMEGA_0[2]
+        lam_spherical = (c.J_PERP - c.J_PERP) / c.J_PERP * c.OMEGA_0[2]
         self.assertEqual(lam_spherical, 0)
         self.assertEqual(-lam_spherical, lam_spherical)
         for w in c.OMEGA:
-            self.assertEqual(_skew_cross(w, _diag_times((c.J_T, c.J_T, c.J_T), w)),
+            self.assertEqual(_skew_cross(w, _diag_times((c.J_PERP, c.J_PERP, c.J_PERP), w)),
                              (0, 0, 0))
         self.assertNotEqual(_skew_cross(c.OMEGA_0, _diag_times(c.J_DIAG, c.OMEGA_0)),
                             (0, 0, 0), "the frozen case must exercise the term")
@@ -1473,7 +1503,7 @@ class TestVEOM04Discrimination(unittest.TestCase):
         relabelled solution fails the Euler equations by exactly twice the gyroscopic
         term.  (The cyclic relabelling passes: see the integrity class.)"""
         c = self.C
-        j_reflected = (c.J_Z, c.J_T, c.J_T)
+        j_reflected = (c.J_PARALLEL, c.J_PERP, c.J_PERP)
         for k in range(4):
             w, w_dot = c.OMEGA[k], c.OMEGA_DOT[k]
             w_r, w_dot_r = (w[2], w[1], w[0]), (w_dot[2], w_dot[1], w_dot[0])

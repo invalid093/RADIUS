@@ -155,7 +155,7 @@ Guard: any evaluation with $m \le 0$ raises. It does not divide.
 | V-VM-03 | Depletion event fires at the analytically known time; mass never negative | within event tolerance; no $m\le0$ |
 | V-VM-04 | Zero mass flow reduces exactly to the constant-mass equations | bitwise identical to the constant-mass path |
 | V-VM-05 | $\dot{\mathbf{J}}$ analytical vs finite-difference agreement (now a **diagnostic** check, not a dynamics check) | $<10^{-6}$ relative |
-| **V-VM-10** | **Variable-mass torque-free spin** (= V-EOM-09): axisymmetric body, uniform depletion, no moment ⟹ $\omega_z$ **constant** | hand-computed; $<10^{-9}$ relative |
+| **V-VM-10** | **Variable-mass torque-free spin** (= V-EOM-09): axisymmetric body spinning about its symmetry axis, uniform depletion, no moment ⟹ $\omega_\parallel$ **constant** — for a RADIUS vehicle the roll rate $p$ about $x_B$ (ADR-0010) | hand-computed; $<10^{-9}$ relative |
 | V-VM-06 | Inertia tensor stays symmetric and positive-definite throughout a burn | no violation |
 | V-VM-07 | Thrust offset produces the expected angular acceleration (= V-EOM-07) | matches $\mathbf{J}^{-1}\mathbf{M}$ |
 | V-VM-08 | Order of accuracy preserved with the mass model active (tests the §4 hypothesis) | slope $4.0\pm0.2$ |

@@ -101,6 +101,9 @@ V-FRM-03, and never re-litigated per module.
 **Altitude** $h$ is a separate, explicitly named scalar, $h = -p^{I}_{z}$ under the flat-Earth
 assumption. Code never uses a raw $z$ component where altitude is meant.
 
+An **analysis-only** canonical principal frame $P$, used to state axisymmetric rigid-body results,
+is defined in §5.1. It is not a simulation frame and does not belong to this set.
+
 ---
 
 ## 4. Rotations and transformation direction
@@ -216,6 +219,53 @@ $$[\boldsymbol{\omega}\times] = \begin{bmatrix}0&-r&q\\ r&0&-p\\ -q&p&0\end{bmat
 pressure. RADIUS writes dynamic pressure as $\bar{q}$ in documents and `q_bar` in code, and pitch
 rate as `q_body`. Neither is ever written bare as `q`. The quaternion is `quat`, never `q`.
 
+### 5.1 Axisymmetric inertia, the $x_B$ symmetry axis, and the canonical frame $P$
+
+Fixed by ADR-0010. Added without changing any convention above (§9).
+
+**The symmetry axis of an axisymmetric RADIUS vehicle is $x_B$.** When its principal axes coincide
+with $B$:
+
+$$\mathbf{J}^{B} = \mathrm{diag}(J_\parallel,\ J_\perp,\ J_\perp),\qquad J_{xx} = J_\parallel,\quad J_{yy} = J_{zz} = J_\perp$$
+
+| Symbol | Meaning |
+|---|---|
+| $J_{xx}, J_{yy}, J_{zz}, J_{xy}, J_{xz}, J_{yz}$ | components of the inertia tensor about the CM, **resolved in $B$**. Always tensor components |
+| $J_\parallel$ | principal moment about the **symmetry axis** — axisymmetric bodies only |
+| $J_\perp$ | principal moment about **any transverse axis** — axisymmetric bodies only |
+| $\omega_\parallel$, $\boldsymbol\omega_\perp$ | component of $\boldsymbol\omega$ along the symmetry axis, and the transverse remainder. For a RADIUS vehicle $\omega_\parallel = p$ and $\boldsymbol\omega_\perp = (0, q, r)$ |
+
+**$J_t$ and $J_z$ are not used** for axisymmetric moments: $J_z$ reads as $J_{zz}$, which on a RADIUS
+vehicle is a *transverse* moment.
+
+Euler's equations for such a body, in $B$, with moments $(L, M, N)$ of §6:
+
+$$J_\parallel\,\dot p = L,\qquad J_\perp\,\dot q + (J_\parallel - J_\perp)\,p\,r = M,\qquad J_\perp\,\dot r - (J_\parallel - J_\perp)\,p\,q = N$$
+
+Torque-free, $p$ is constant and $\dot q = -\lambda r$, $\dot r = \lambda q$, with
+
+$$\lambda = \frac{J_\parallel - J_\perp}{J_\perp}\,\omega_\parallel$$
+
+the rate at which the transverse angular velocity rotates **relative to the body**, positive
+right-handed about the positive symmetry axis ($+x_B$: from $+y_B$ toward $+z_B$). It is **not** the
+inertial precession rate $\lVert\mathbf{h}\rVert/J_\perp$; the distinction is set out in
+`VERIFICATION_AND_VALIDATION.md` §2 (V-EOM-04).
+
+**Canonical principal frame $P$ — analysis only.** An analytical derivation may relabel the principal
+axes so that the symmetry axis is the third one: frame $P$, axes $x_P, y_P, z_P$, symmetry axis $z_P$,
+$\mathbf{J}^{P} = \mathrm{diag}(J_\perp, J_\perp, J_\parallel)$. For a RADIUS vehicle whose principal
+axes coincide with $B$:
+
+$$x_P = y_B,\qquad y_P = z_B,\qquad z_P = x_B,\qquad \boldsymbol\omega^{P} = (q,\ r,\ p)$$
+
+This relabelling is **cyclic** (determinant $+1$), so $P$ is right-handed and every cross product is
+preserved. A relabelling that swaps two axes is a reflection: it reverses every cross product and is
+**forbidden**.
+
+$P$ is not a simulation frame and is not one of the frames of §3. No production module uses it, no
+output is expressed in it, and any quantity derived in $P$ is mapped to $B$ before it is compared with
+RADIUS. If the principal axes are not aligned with $B$, this mapping does not apply.
+
 ---
 
 ## 6. Forces, moments and the moment reference point
@@ -279,6 +329,7 @@ Not yet binding — no code exists — but fixed now so the first module obeys t
 | Dynamic pressure is never `q` | `q_bar` |
 | Quaternion is never `q` | `quat_b_from_i` |
 | Rates carry the axis meaning | `p_body`, `q_body`, `r_body` |
+| Axisymmetric moments name the axis *role*, never an axis letter (ADR-0010) | `j_parallel`, `j_perp` — not `j_z`, `j_t` |
 | A moment names its reference point | `moment_about_cm_in_b` |
 
 ---
