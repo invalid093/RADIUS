@@ -1,4 +1,4 @@
-"""V-EOM-01, V-EOM-02, V-EOM-03 — frozen analytical anchors for the translational EOM.
+"""V-EOM-01 to V-EOM-04 — frozen analytical anchors for the equations of motion.
 
 WHAT THIS FILE IS
 -----------------
@@ -15,6 +15,10 @@ The intended chain is::
 Only the first two links exist today.  These tests establish that the frozen values are
 arithmetically correct and that they have discriminating power; they do not verify any
 code, because there is none to verify.
+
+**V-EOM-04** adds the first *rotational* anchor -- torque-free axisymmetric coning --
+frozen before any rotational dynamics implementation exists.  It lives in its own
+section below, with its own derivation, and shares only the exact-arithmetic helpers.
 
 GOVERNING EQUATION (RS-004, already audited)
 --------------------------------------------
@@ -70,6 +74,8 @@ integrity checks below use :class:`fractions.Fraction`, so they are exact ration
 arithmetic with no floating-point tolerance at all.  The frozen values are also all
 exactly representable in binary64, so a future implementation can be compared against
 them with a tolerance of 1e-12 — justified below in ``FUTURE_COMPARISON_TOL``.
+V-EOM-04 is the exception: its values are exact rationals, not all representable in
+binary64, and that tolerance does not transfer to it (see its section).
 
 Run from the repository root::
 
@@ -786,6 +792,696 @@ class TestVEOM03Discrimination(unittest.TestCase):
                          "V-EOM-03 must detect a 1 m/s initial-velocity error.")
         self.assertEqual(max(abs(x - y) for x, y in zip(p_w, c.P_EXPECTED)), c.T,
                          "the same error must displace position by v_err * t.")
+
+
+# ======================================================================================
+# V-EOM-04 — Torque-free axisymmetric coning.  The first ROTATIONAL anchor.
+# ======================================================================================
+#
+# WHY THIS ANCHOR EXISTS
+# ----------------------
+# V-EOM-01..03 hold attitude fixed and contain no rotational equation, so until now the
+# rotational dynamics had no verification of any kind.  V-EOM-04 anchors the gyroscopic
+# term ``w x (J w)`` quantitatively, and nothing else.
+#
+# GOVERNING EQUATION (RS-004 sec 4.1, ADR-0009) at constant inertia and zero moment:
+#
+#     J wdot + w x (J w) = 0,        w = omega^B_{B/I} = (p, q, r)   (NOTATION sec 5)
+#
+# DERIVATION -- performed here, not inherited
+# -------------------------------------------
+# With J = diag(J_t, J_t, J_z), J w = (J_t w_x, J_t w_y, J_z w_z).  Using the skew form
+# [w x] = [[0, -r, q], [r, 0, -p], [-q, p, 0]] from NOTATION sec 5:
+#
+#     w x (J w) = ( (J_z - J_t) w_y w_z,  -(J_z - J_t) w_x w_z,  0 )
+#
+# so the three body-axis Euler equations are
+#
+#     J_t wdot_x + (J_z - J_t) w_y w_z = 0     =>   wdot_x = -lambda w_y
+#     J_t wdot_y - (J_z - J_t) w_x w_z = 0     =>   wdot_y = +lambda w_x
+#     J_z wdot_z                       = 0     =>   w_z is constant
+#
+#     lambda = ((J_z - J_t) / J_t) w_z         constant, because w_z is.
+#
+# Component solution (differentiate to check: it satisfies both transverse equations):
+#
+#     w_x(t) = w_x0 cos(lambda t) - w_y0 sin(lambda t)
+#     w_y(t) = w_y0 cos(lambda t) + w_x0 sin(lambda t)
+#
+# Complex-variable cross-check.  With u = w_x + i w_y,
+#     u_dot = -lambda w_y + i lambda w_x = i lambda (w_x + i w_y) = i lambda u,
+# so u(t) = u0 exp(i lambda t), whose real and imaginary parts are the component solution
+# above.  The two derivations agree; both are executed as tests below.
+#
+# WHAT lambda IS -- AND WHAT IT IS NOT
+# ------------------------------------
+# "Coning rate" is used for at least three different quantities.  This file keeps them
+# apart:
+#
+#   lambda  = ((J_z - J_t)/J_t) w_z   the rate at which the transverse angular-velocity
+#                                     vector rotates RELATIVE TO THE BODY AXES, signed by
+#                                     the right-hand rule about +z_B (positive: from +x_B
+#                                     toward +y_B).  THIS is what V-EOM-04 verifies.
+#   sigma   = -lambda                 the rate at which the BODY rotates relative to the
+#                                     plane containing H and z_B.  Same magnitude,
+#                                     opposite sign: a "sign disagreement" between two
+#                                     statements can be nothing more than this change of
+#                                     reference.
+#   |H|/J_t                           the rate at which z_B precesses about the inertially
+#                                     fixed angular momentum H, seen from INERTIAL space.
+#                                     A different magnitude.  Not observable without
+#                                     attitude propagation, and NOT verified here.
+#
+# They are linked by the exact decomposition  w = H/J_t + sigma zhat_B  (tested below).
+#
+# The formula carried by RS-004 sec 7, lambda = ((J_z - J_t)/J_t) w_z, is CORRECT in
+# magnitude and sign for the first quantity.  It was incomplete as written: it did not
+# state the sign reference, did not say it is a body-frame rate, and assumes a symmetry
+# axis of z -- see the next paragraph.
+#
+# AXIS LABELLING -- A CONVENTION MISMATCH FOUND WHILE BUILDING THIS ANCHOR
+# ------------------------------------------------------------------------
+# RS-004 sec 7 specifies V-EOM-04 with J_x = J_y = J_t != J_z, i.e. symmetry about z.
+# NOTATION sec 3 puts x_B along the vehicle LONGITUDINAL axis, so a RADIUS vehicle is
+# axisymmetric about x_B, with J_y = J_z.  The z-symmetric case is still a valid test of
+# J wdot + w x (J w) = 0 -- the equation does not care which axis is special -- and it is
+# frozen here as specified.  The x_B-symmetric form a RADIUS vehicle will actually have is
+# frozen alongside it, obtained by the CYCLIC relabelling (x, y, z) -> (y, z, x), which is
+# a proper rotation (det +1) and therefore preserves the cross product.  Swapping two
+# axes instead is a reflection (det -1): it flips the cross product, and is shown to FAIL.
+# That is the handedness check.
+#
+# SCOPE.  This is an angular-velocity anchor only.  No quaternion, attitude, integrator or
+# time-stepping appears.  It does not verify attitude propagation, numerical integration,
+# translational dynamics, or a complete rigid-body simulation.
+#
+# TOLERANCE.  FUTURE_COMPARISON_TOL above was justified for CLOSED-FORM translational
+# propagation and does NOT transfer to this anchor.  A rotational implementation must
+# integrate numerically, so its comparison tolerance has to come from a measured
+# convergence study (RS-005, V-NUM-01) in the phase that builds it.  No number is set here.
+# ======================================================================================
+
+
+def _skew_cross(w, b):
+    """``w x b`` computed as ``[w x] b``, with ``[w x]`` transcribed from NOTATION sec 5."""
+    p, q, r = w
+    skew = [[0, -r, q],
+            [r, 0, -p],
+            [-q, p, 0]]
+    return _matvec(skew, b)
+
+
+def _diag_times(j_diag, w):
+    """``J w`` for a diagonal inertia tensor given as its three principal moments."""
+    return tuple(j * x for j, x in zip(j_diag, w))
+
+
+def _torque_free_residual(j_diag, w, w_dot):
+    """``J wdot + w x (J w)`` -- identically zero on any torque-free trajectory."""
+    return _add(_diag_times(j_diag, w_dot), _skew_cross(w, _diag_times(j_diag, w)))
+
+
+def _cmul(a, b):
+    """Exact complex product; a complex number is a ``(real, imag)`` pair of Fractions."""
+    return (a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0])
+
+
+def _cpow_unit(z, n):
+    """``z**n`` for ``|z| = 1`` and integer ``n``; a negative power uses the conjugate."""
+    if n < 0:
+        z, n = (z[0], -z[1]), -n
+    out = (Fraction(1), Fraction(0))
+    for _ in range(n):
+        out = _cmul(out, z)
+    return out
+
+
+# (cos, sin) of 0, pi/2, pi, 3 pi/2 -- the only exact points needed besides atan(3/4).
+_QUARTER_TURNS = ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)),
+                  (Fraction(-1), Fraction(0)), (Fraction(0), Fraction(-1)))
+
+
+def _closed_form_transverse(w_x0, w_y0, cos_sin):
+    """``(w_x, w_y)`` at the phase ``lambda t`` whose exact cosine and sine are given."""
+    cos_p, sin_p = cos_sin
+    return (w_x0 * cos_p - w_y0 * sin_p, w_y0 * cos_p + w_x0 * sin_p)
+
+
+class VEOM04TorqueFreeAxisymmetricConing:
+    """V-EOM-04 — torque-free axisymmetric coning. Frozen oracle.
+
+    CASE SELECTION — CHOSEN BY ANALYSIS, NOT ASSUMED
+    ------------------------------------------------
+    Ten candidate constructions were scored, in exact arithmetic, against 26 mutations
+    before this one was fixed.  Each rejected construction silently voids at least one:
+
+    * ``J_z = J_t`` (spherical): lambda = 0; eleven mutations become invisible, including
+      the sign reversal and frozen transverse components.
+    * ``w_x0 = w_y0 = 0``: every transverse mutation becomes invisible (21 of 26).
+    * ``J_z/J_t = 1/2``: ``(J_z/J_t - 1) = -(J_z/J_t)``, so the wrong formula
+      ``-(J_z/J_t) w_z`` -- a sign-slipped small-nutation INERTIAL precession rate --
+      reproduces lambda exactly.  Of the three rates above, that confusion is the one most
+      worth catching.
+    * ``J_z/J_t = 2``: ``(J_z - J_t)/J_t = 1``, so omitting the ratio is invisible.
+    * ``J_t = 1``: omitting the division by ``J_t`` is invisible.
+    * ``w_z = 1``: omitting ``w_z`` from lambda is invisible.
+    * ``w_x0 = 0``: a symmetrically (wrongly) coupled solution is invisible.
+    * ``w_x0 = w_y0``: swapping the transverse components is invisible at t = 0.
+
+    Hence a prolate body (J_z < J_t, as a slender vehicle is) with ``J_z/J_t = 1/3``,
+    neither moment equal to 1, ``w_z = 3``, and transverse components that are non-zero,
+    unequal in magnitude and of opposite sign.
+
+        J_t = 6 kg m^2,  J_z = 2 kg m^2,  w0 = (2, -5, 3) rad/s
+        lambda = ((2 - 6)/6)(3) = -2 rad/s
+
+    lambda < 0: for a prolate body spinning positively, the transverse rate REGRESSES,
+    rotating clockwise about +z_B as seen relative to the body.
+
+    SAMPLE TIMES — WHY FOUR, AND WHY ONE IS NOT A MULTIPLE OF PI
+    -------------------------------------------------------------
+    For |lambda| = 2 rad/s the sample times are ``0, pi/4, pi/2, atan(3/4)`` s, giving
+    ``lambda t = 0, -pi/2, -pi, -2 atan(3/4)``, all with exact cosine and sine.
+
+    Quarter- and half-cycle samples alone are NOT enough.  A rate ``lambda' = -3 lambda``
+    lands on the same point as ``lambda`` at every multiple of pi/2, and that is exactly
+    the mutation ``(J_t - J_z)/J_z w_z`` (both numerator and denominator wrong).  The
+    half-cycle sample is also blind to a plain sign reversal, since exp(i pi) =
+    exp(-i pi).  ``atan(3/4)`` is incommensurate with pi, so no integer multiple of lambda
+    other than lambda itself reaches the same point there.  The last phase is exact by the
+    double-angle identities from tan = 3/4:
+
+        cos(2a) = (1 - 9/16)/(1 + 9/16) = 7/25,   sin(2a) = (3/2)/(25/16) = 24/25
+
+    and with lambda < 0 the frozen (cos, sin) of lambda t is (7/25, -24/25).
+
+    FROZEN VALUES, BY HAND
+    ----------------------
+        t = 0         : w = ( 2, -5, 3)
+        t = pi/4      : (cos, sin) = (0, -1)  ->  w = (0 - 5,  0 - 2, 3) = (-5, -2, 3)
+        t = pi/2      : (cos, sin) = (-1, 0)  ->  w = (-2, 5, 3)
+        t = atan(3/4) : w_x = 2(7/25) - (-5)(-24/25) = (14 - 120)/25 = -106/25
+                        w_y = -5(7/25) + 2(-24/25)   = (-35 - 48)/25 = -83/25
+                        w   = (-106/25, -83/25, 3)
+
+        wdot = (-lambda w_y, lambda w_x, 0) = (2 w_y, -2 w_x, 0) at every sample.
+
+    Invariants at every sample: |w_t|^2 = 29, |H|^2 = 1080, 2T = w.Jw = 192.
+    (|H|/J_t)^2 = 30, which is NOT lambda^2 = 4: the inertial precession rate and the
+    body-frame transverse rate genuinely differ for this case, so confusing them is caught.
+
+    Units: rad/s, rad/s^2, kg m^2.  A verification case, not a vehicle: the nutation is
+    large (|w_t| > w_z) because that maximises the transverse discrimination margins.
+    """
+
+    J_T = Fraction(6)                   # kg m^2, J_x = J_y
+    J_Z = Fraction(2)                   # kg m^2, symmetry axis z_B; NOT J_t/2, NOT 2 J_t
+    J_DIAG = (J_T, J_T, J_Z)
+    OMEGA_0 = _v(2, -5, 3)              # rad/s, body axes; w_z != 1
+    LAMBDA = Fraction(-2)               # rad/s = ((J_z - J_t)/J_t) w_z
+
+    # Sample times in seconds, symbolic: exact phases exist; exact times do not.
+    SAMPLE_TIMES_S = ("0", "pi/4", "pi/2", "atan(3/4)")
+    # Exact (cos, sin) of lambda*t at each sample.
+    COS_SIN = ((Fraction(1), Fraction(0)),
+               (Fraction(0), Fraction(-1)),
+               (Fraction(-1), Fraction(0)),
+               (Fraction(7, 25), Fraction(-24, 25)))
+    OMEGA = (_v(2, -5, 3),
+             _v(-5, -2, 3),
+             _v(-2, 5, 3),
+             (Fraction(-106, 25), Fraction(-83, 25), Fraction(3)))
+    OMEGA_DOT = (_v(-10, -4, 0),
+                 _v(-4, 10, 0),
+                 _v(10, 4, 0),
+                 (Fraction(-166, 25), Fraction(212, 25), Fraction(0)))
+
+    TRANSVERSE_RATE_SQ = Fraction(29)            # (rad/s)^2
+    ANGULAR_MOMENTUM_SQ = Fraction(1080)         # (kg m^2 rad/s)^2
+    TWICE_KINETIC_ENERGY = Fraction(192)         # kg m^2 (rad/s)^2
+    INERTIAL_PRECESSION_RATE_SQ = Fraction(30)   # (|H|/J_t)^2 -- NOT lambda^2
+
+    # RADIUS-native labelling (NOTATION sec 3): symmetry about x_B, J_y = J_z = J_t.
+    # Cyclic relabelling of the case above: new (x, y, z) = old (z, x, y).
+    J_DIAG_X_SYMMETRIC = (J_Z, J_T, J_T)
+    OMEGA_X_SYMMETRIC = (_v(3, 2, -5),
+                         _v(3, -5, -2),
+                         _v(3, -2, 5),
+                         (Fraction(3), Fraction(-106, 25), Fraction(-83, 25)))
+    OMEGA_DOT_X_SYMMETRIC = (_v(0, -10, -4),
+                             _v(0, -4, 10),
+                             _v(0, 10, 4),
+                             (Fraction(0), Fraction(-166, 25), Fraction(212, 25)))
+
+
+class TestVEOM04AnchorIntegrity(unittest.TestCase):
+    """The frozen V-EOM-04 oracle is internally consistent, in exact arithmetic.
+
+    The derivation chain runs strictly:
+
+        project convention -> independently expanded Euler equations
+                           -> independently solved closed form -> frozen values
+
+    Nothing here imports ``radius``, and there is no production rotational-dynamics code
+    to import.  Every test name carries ``v_eom_04`` so none can shadow another.
+    """
+
+    C = VEOM04TorqueFreeAxisymmetricConing
+
+    def test_v_eom_04_gyroscopic_term_expands_to_the_derived_components(self):
+        """Derivation step 1, executed: w x (J w) for J = diag(J_t, J_t, J_z)."""
+        c = self.C
+        probes = list(c.OMEGA) + [_v(7, 11, -13),
+                                  (Fraction(1, 3), Fraction(-2, 7), Fraction(5, 2))]
+        for j_t, j_z in ((c.J_T, c.J_Z), (Fraction(9, 2), Fraction(11, 3))):
+            for w in probes:
+                with self.subTest(j_t=j_t, j_z=j_z, omega=w):
+                    self.assertEqual(
+                        _skew_cross(w, _diag_times((j_t, j_t, j_z), w)),
+                        ((j_z - j_t) * w[1] * w[2], -(j_z - j_t) * w[0] * w[2], 0),
+                        "V-EOM-04: the gyroscopic term must expand to "
+                        "((J_z-J_t) w_y w_z, -(J_z-J_t) w_x w_z, 0).")
+
+    def test_v_eom_04_lambda_literal_follows_from_inertia_and_spin(self):
+        c = self.C
+        self.assertEqual((c.J_Z - c.J_T) / c.J_T * c.OMEGA_0[2], c.LAMBDA,
+                         "V-EOM-04: lambda = ((J_z - J_t)/J_t) w_z must equal -2 rad/s.")
+        self.assertEqual(c.OMEGA[0], c.OMEGA_0)
+
+    def test_v_eom_04_sample_phases_are_exact(self):
+        """|lambda| t = 0, pi/2, pi, 2 atan(3/4) for |lambda| = 2; lambda < 0 negates sin.
+
+        The last phase is built from its half-angle tangent, 3/4, by exact identities, so
+        the symbolic time ``atan(3/4)`` and the frozen cosine and sine cannot drift apart
+        (``atan(4/3)`` would give (-7/25, 24/25) instead).
+        """
+        c = self.C
+        self.assertEqual(abs(c.LAMBDA), 2, "sample times are defined for |lambda| = 2")
+        tau = Fraction(3, 4)
+        double_angle = ((1 - tau * tau) / (1 + tau * tau), 2 * tau / (1 + tau * tau))
+        magnitude_phases = (_QUARTER_TURNS[0], _QUARTER_TURNS[1], _QUARTER_TURNS[2],
+                            double_angle)
+        sign = -1 if c.LAMBDA < 0 else 1
+        for k, (cos_p, sin_p) in enumerate(magnitude_phases):
+            with self.subTest(sample=c.SAMPLE_TIMES_S[k]):
+                self.assertEqual(c.COS_SIN[k], (cos_p, sign * sin_p))
+                self.assertEqual(c.COS_SIN[k][0] ** 2 + c.COS_SIN[k][1] ** 2, 1)
+
+    def test_v_eom_04_component_closed_form_reproduces_every_frozen_sample(self):
+        c = self.C
+        for k in range(4):
+            with self.subTest(sample=c.SAMPLE_TIMES_S[k]):
+                w_x, w_y = _closed_form_transverse(c.OMEGA_0[0], c.OMEGA_0[1], c.COS_SIN[k])
+                self.assertEqual(c.OMEGA[k], (w_x, w_y, c.OMEGA_0[2]))
+
+    def test_v_eom_04_complex_variable_solution_agrees_with_components(self):
+        """u = w_x + i w_y: u(t) = u0 exp(i lambda t) and u_dot = i lambda u."""
+        c = self.C
+        u0 = (c.OMEGA_0[0], c.OMEGA_0[1])
+        for k in range(4):
+            with self.subTest(sample=c.SAMPLE_TIMES_S[k]):
+                u = _cmul(u0, c.COS_SIN[k])
+                self.assertEqual(u, c.OMEGA[k][:2],
+                                 "V-EOM-04: u0 exp(i lambda t) must match the samples.")
+                self.assertEqual(_cmul((Fraction(0), c.LAMBDA), u), c.OMEGA_DOT[k][:2],
+                                 "V-EOM-04: u_dot must equal i lambda u.")
+
+    def test_v_eom_04_omega_z_is_constant_at_every_sample(self):
+        c = self.C
+        for k in range(4):
+            with self.subTest(sample=c.SAMPLE_TIMES_S[k]):
+                self.assertEqual(c.OMEGA[k][2], c.OMEGA_0[2])
+                self.assertEqual(c.OMEGA_DOT[k][2], 0)
+
+    def test_v_eom_04_transverse_magnitude_is_constant_at_every_sample(self):
+        c = self.C
+        for k in range(4):
+            with self.subTest(sample=c.SAMPLE_TIMES_S[k]):
+                self.assertEqual(c.OMEGA[k][0] ** 2 + c.OMEGA[k][1] ** 2,
+                                 c.TRANSVERSE_RATE_SQ)
+
+    def test_v_eom_04_frozen_rates_satisfy_the_torque_free_euler_equations(self):
+        c = self.C
+        for k in range(4):
+            with self.subTest(sample=c.SAMPLE_TIMES_S[k]):
+                self.assertEqual(
+                    _torque_free_residual(c.J_DIAG, c.OMEGA[k], c.OMEGA_DOT[k]), (0, 0, 0),
+                    "V-EOM-04: J wdot + w x (J w) must vanish exactly.")
+
+    def test_v_eom_04_frozen_rate_derivatives_are_the_derivative_of_the_closed_form(self):
+        """d/dt of the closed form, taken by hand, against the frozen wdot literals."""
+        c = self.C
+        w_x0, w_y0, _ = c.OMEGA_0
+        for k in range(4):
+            cos_p, sin_p = c.COS_SIN[k]
+            with self.subTest(sample=c.SAMPLE_TIMES_S[k]):
+                self.assertEqual(
+                    c.OMEGA_DOT[k],
+                    (c.LAMBDA * (-w_x0 * sin_p - w_y0 * cos_p),
+                     c.LAMBDA * (-w_y0 * sin_p + w_x0 * cos_p), 0))
+                self.assertEqual(c.OMEGA_DOT[k],
+                                 (-c.LAMBDA * c.OMEGA[k][1], c.LAMBDA * c.OMEGA[k][0], 0))
+
+    def test_v_eom_04_transverse_rate_regresses_relative_to_the_body(self):
+        """Rotation sense, as a sign: z-component of w_t(0) x w_t(pi/4).
+
+        It equals sin(lambda t) |w_t|^2 = -29 < 0, i.e. rotation about -z_B relative to
+        the body.  A prolate body (J_z < J_t) with w_z > 0 must regress.
+        """
+        c = self.C
+        w0, w1 = c.OMEGA[0], c.OMEGA[1]
+        z_cross = w0[0] * w1[1] - w0[1] * w1[0]
+        self.assertEqual(z_cross, c.COS_SIN[1][1] * c.TRANSVERSE_RATE_SQ)
+        self.assertEqual(z_cross, -29)
+        self.assertLess(c.J_Z, c.J_T)
+        self.assertGreater(c.OMEGA_0[2], 0)
+
+    def test_v_eom_04_angular_momentum_magnitude_and_kinetic_energy_are_conserved(self):
+        c = self.C
+        for k in range(4):
+            h = _diag_times(c.J_DIAG, c.OMEGA[k])
+            with self.subTest(sample=c.SAMPLE_TIMES_S[k]):
+                self.assertEqual(sum(x * x for x in h), c.ANGULAR_MOMENTUM_SQ)
+                self.assertEqual(sum(w * x for w, x in zip(c.OMEGA[k], h)),
+                                 c.TWICE_KINETIC_ENERGY)
+
+    def test_v_eom_04_body_rate_splits_into_inertial_precession_and_relative_spin(self):
+        """w = H/J_t + sigma zhat_B with sigma = -lambda: the three rates, kept apart."""
+        c = self.C
+        sigma = -c.LAMBDA
+        for k in range(4):
+            h = _diag_times(c.J_DIAG, c.OMEGA[k])
+            with self.subTest(sample=c.SAMPLE_TIMES_S[k]):
+                self.assertEqual(c.OMEGA[k],
+                                 _add(_scale(Fraction(1) / c.J_T, h), (0, 0, sigma)))
+        self.assertEqual(c.ANGULAR_MOMENTUM_SQ / c.J_T ** 2, c.INERTIAL_PRECESSION_RATE_SQ)
+        self.assertNotEqual(c.INERTIAL_PRECESSION_RATE_SQ, c.LAMBDA ** 2,
+                            "the inertial precession rate must differ from |lambda| here")
+
+    def test_v_eom_04_x_body_symmetric_form_is_the_cyclic_relabelling(self):
+        """RADIUS vehicles are symmetric about x_B.  The cyclic relabelling is a proper
+        rotation, so it must carry the solution to a solution with the SAME lambda."""
+        c = self.C
+        for k in range(4):
+            w, w_dot = c.OMEGA[k], c.OMEGA_DOT[k]
+            with self.subTest(sample=c.SAMPLE_TIMES_S[k]):
+                self.assertEqual(c.OMEGA_X_SYMMETRIC[k], (w[2], w[0], w[1]))
+                self.assertEqual(c.OMEGA_DOT_X_SYMMETRIC[k], (w_dot[2], w_dot[0], w_dot[1]))
+                self.assertEqual(
+                    _torque_free_residual(c.J_DIAG_X_SYMMETRIC, c.OMEGA_X_SYMMETRIC[k],
+                                          c.OMEGA_DOT_X_SYMMETRIC[k]), (0, 0, 0))
+        j_axial, j_t = c.J_DIAG_X_SYMMETRIC[0], c.J_DIAG_X_SYMMETRIC[1]
+        self.assertEqual((j_axial - j_t) / j_t * c.OMEGA_X_SYMMETRIC[0][0], c.LAMBDA)
+
+    def test_v_eom_04_anchor_rejects_a_deliberately_incorrect_oracle(self):
+        """Required integrity check: the oracle tests must be capable of failing."""
+        c = self.C
+        wrong_quarter = _v(5, 2, 3)          # the value a reversed coning sign gives
+        w_x, w_y = _closed_form_transverse(c.OMEGA_0[0], c.OMEGA_0[1], c.COS_SIN[1])
+        self.assertNotEqual((w_x, w_y, c.OMEGA_0[2]), wrong_quarter)
+        self.assertNotEqual(
+            _torque_free_residual(c.J_DIAG, c.OMEGA[1], _scale(-1, c.OMEGA_DOT[1])),
+            (0, 0, 0), "a sign-reversed wdot must not satisfy the Euler equations")
+        self.assertNotEqual((c.J_Z - c.J_T) / c.J_T * c.OMEGA_0[2], -c.LAMBDA)
+        self.assertNotEqual(
+            c.OMEGA[3][0] ** 2 + c.OMEGA[3][1] ** 2 + Fraction(1, 25),
+            c.TRANSVERSE_RATE_SQ)
+
+    def test_v_eom_04_case_construction_avoids_the_known_traps(self):
+        """Guards the anchor's discriminating power against a later 'tidy-up'."""
+        c = self.C
+        w_x0, w_y0, w_z = c.OMEGA_0
+        self.assertNotEqual(c.J_Z, c.J_T, "spherical body: lambda = 0")
+        self.assertNotEqual(c.LAMBDA, 0)
+        self.assertNotEqual(w_x0, 0, "w_x0 = 0 hides a symmetric-coupling error")
+        self.assertNotEqual(w_y0, 0, "zero transverse rate hides every transverse error")
+        self.assertNotEqual(abs(w_x0), abs(w_y0), "equal components hide a swap at t = 0")
+        self.assertNotEqual(c.J_T, 1, "J_t = 1 hides a missing division by J_t")
+        self.assertNotIn(w_z, (0, 1, -1), "w_z = 1 hides a missing w_z factor")
+        self.assertNotIn(c.J_Z / c.J_T, (Fraction(1, 2), Fraction(2)),
+                         "J_z/J_t = 1/2 or 2 makes a wrong formula coincide with lambda")
+        for k in range(4):
+            with self.subTest(sample=c.SAMPLE_TIMES_S[k]):
+                self.assertNotIn(0, c.OMEGA[k][:2],
+                                 "a zero component is somewhere a mutation can hide")
+
+    def test_v_eom_04_rejected_constructions_really_void_a_mutation(self):
+        """Each rejected construction, demonstrated rather than asserted."""
+        def lam(j_t, j_z, w_z):
+            return (j_z - j_t) / j_t * w_z
+
+        F = Fraction
+        self.assertEqual(-(F(3) / F(6)) * F(4), lam(F(6), F(3), F(4)),
+                         "J_z/J_t = 1/2: -(J_z/J_t) w_z coincides with lambda")
+        self.assertEqual(F(-2), lam(F(3), F(6), F(-2)),
+                         "J_z/J_t = 2: w_z alone coincides with lambda")
+        self.assertEqual((F(1, 3) - F(1)) * F(3), lam(F(1), F(1, 3), F(3)),
+                         "J_t = 1: omitting the division by J_t is invisible")
+        self.assertEqual((F(6) - F(2)) / F(2), lam(F(2), F(6), F(1)),
+                         "w_z = 1: omitting w_z is invisible")
+        w_y0 = F(-5)
+        for cos_p, sin_p in self.C.COS_SIN:
+            true = _closed_form_transverse(F(0), w_y0, (cos_p, sin_p))
+            symmetric = (F(0) * cos_p - w_y0 * sin_p, w_y0 * cos_p - F(0) * sin_p)
+            self.assertEqual(true, symmetric,
+                             "w_x0 = 0: a symmetrically coupled solution is invisible")
+        # ...and none of them coincide for the case actually frozen.
+        c = self.C
+        j_t, j_z, w_z = c.J_T, c.J_Z, c.OMEGA_0[2]
+        for wrong in (-(j_z / j_t) * w_z, w_z, (j_z - j_t) * w_z, (j_z - j_t) / j_t):
+            self.assertNotEqual(wrong, c.LAMBDA)
+
+
+class TestVEOM04Discrimination(unittest.TestCase):
+    """What V-EOM-04 detects, with exact margins, against mutations A-J and more.
+
+    A mutated rate ``lambda'`` is evaluated EXACTLY at a sample only when its phase is an
+    exactly representable point; elsewhere the helper returns ``None`` and the test relies
+    on the derivative at t = 0, which is always exact and separates any lambda' != lambda.
+    No floating point is used anywhere in this class.
+    """
+
+    C = VEOM04TorqueFreeAxisymmetricConing
+
+    @staticmethod
+    def _phase(multiple, k):
+        """Exact (cos, sin) of ``multiple * lambda * t_k``, or None if not exact.
+
+        ``lambda t_k = 0, -pi/2, -pi, -2 alpha`` with ``alpha = atan(3/4)``.
+        """
+        m = Fraction(multiple)
+        if k == 0:
+            return _QUARTER_TURNS[0]
+        if k == 1:
+            return _QUARTER_TURNS[int(-m) % 4] if m.denominator == 1 else None
+        if (2 * m).denominator != 1:
+            return None
+        if k == 2:
+            return _QUARTER_TURNS[int(-2 * m) % 4]
+        return _cpow_unit((Fraction(4, 5), Fraction(-3, 5)), int(2 * m))
+
+    def _rate_model(self, rate, w0=None):
+        """Samples of the solution rotating at ``rate`` from ``w0`` (None = not exact)."""
+        c = self.C
+        w0 = c.OMEGA_0 if w0 is None else w0
+        samples = []
+        for k in range(4):
+            cos_sin = self._phase(Fraction(rate) / c.LAMBDA, k)
+            samples.append(None if cos_sin is None else
+                           _closed_form_transverse(w0[0], w0[1], cos_sin) + (w0[2],))
+        return samples
+
+    def _margins(self, samples):
+        """Max-norm distance from the frozen oracle at each sample (None = not exact)."""
+        return [None if s is None else max(abs(x - y) for x, y in zip(s, self.C.OMEGA[k]))
+                for k, s in enumerate(samples)]
+
+    def _rate_derivative_margin(self, rate, w0=None):
+        c = self.C
+        w0 = c.OMEGA_0 if w0 is None else w0
+        wrong = (-rate * w0[1], rate * w0[0], 0)
+        return max(abs(x - y) for x, y in zip(wrong, c.OMEGA_DOT[0]))
+
+    def test_v_eom_04_discrimination_harness_reproduces_the_frozen_oracle(self):
+        """A harness that reports margins for everything would prove nothing."""
+        c = self.C
+        self.assertEqual(self._rate_model(c.LAMBDA), list(c.OMEGA))
+        self.assertEqual(self._margins(self._rate_model(c.LAMBDA)), [0, 0, 0, 0])
+        self.assertEqual(self._rate_derivative_margin(c.LAMBDA), 0)
+
+    def test_v_eom_04_mutation_a_reversed_coning_sign(self):
+        """Detected at pi/4 and atan(3/4). BLIND SPOT: the half-cycle sample cannot see
+        it, because exp(i pi) = exp(-i pi); t = 0 trivially cannot either."""
+        c = self.C
+        self.assertEqual(self._margins(self._rate_model(-c.LAMBDA)),
+                         [0, 10, 0, Fraction(48, 5)])
+        self.assertEqual(self._rate_derivative_margin(-c.LAMBDA), 20)
+
+    def test_v_eom_04_mutation_b_wrong_inertia_ratio(self):
+        c = self.C
+        j_t, j_z, w_z = c.J_T, c.J_Z, c.OMEGA_0[2]
+        # (J_t - J_z)/J_t: numerator reversed.  Numerically identical to mutation A.
+        self.assertEqual((j_t - j_z) / j_t * w_z, -c.LAMBDA)
+        # (J_z - J_t)/J_z: wrong denominator, lambda' = 3 lambda.
+        rate = (j_z - j_t) / j_z * w_z
+        self.assertEqual(self._margins(self._rate_model(rate)),
+                         [0, 10, 0, Fraction(131232, 15625)])
+        self.assertEqual(self._rate_derivative_margin(rate), 20)
+        # (J_t - J_z)/J_z: both wrong, lambda' = -3 lambda.  ALIASED: invisible at the
+        # quarter AND half cycle; only atan(3/4) and the derivative catch it.
+        rate = (j_t - j_z) / j_z * w_z
+        self.assertEqual(rate, -3 * c.LAMBDA)
+        self.assertEqual(self._margins(self._rate_model(rate)),
+                         [0, 0, 0, Fraction(90048, 15625)])
+        self.assertEqual(self._rate_derivative_margin(rate), 40)
+        # (J_z + J_t)/J_t: sign slip inside the difference.
+        rate = (j_z + j_t) / j_t * w_z
+        self.assertEqual(self._margins(self._rate_model(rate)),
+                         [0, 7, 10, Fraction(5382, 625)])
+        self.assertEqual(self._rate_derivative_margin(rate), 30)
+
+    def test_v_eom_04_mutation_b_inertial_precession_rate_used_as_body_rate(self):
+        c = self.C
+        j_t, j_z, w_z = c.J_T, c.J_Z, c.OMEGA_0[2]
+        # Small-nutation inertial precession (J_z/J_t) w_z, with either sign.
+        self.assertEqual(self._margins(self._rate_model(j_z / j_t * w_z)),
+                         [0, None, 7, Fraction(221, 25)])
+        self.assertEqual(self._rate_derivative_margin(j_z / j_t * w_z), 15)
+        self.assertEqual(self._margins(self._rate_model(-j_z / j_t * w_z)),
+                         [0, None, 7, Fraction(71, 25)])
+        self.assertEqual(self._rate_derivative_margin(-j_z / j_t * w_z), 5)
+        # Exact inertial precession |H|/J_t = sqrt(30) is irrational: compare |wdot(0)|^2
+        # exactly, rate^2 |w_t|^2 = 30 * 29 against the frozen 116.
+        self.assertEqual(c.INERTIAL_PRECESSION_RATE_SQ * c.TRANSVERSE_RATE_SQ, 870)
+        self.assertEqual(sum(x * x for x in c.OMEGA_DOT[0]), 116)
+
+    def test_v_eom_04_mutation_b_missing_factor(self):
+        c = self.C
+        j_t, j_z, w_z = c.J_T, c.J_Z, c.OMEGA_0[2]
+        # Ratio omitted: lambda' = w_z.
+        self.assertEqual(self._margins(self._rate_model(w_z)),
+                         [0, None, 7, Fraction(1027, 125)])
+        self.assertEqual(self._rate_derivative_margin(w_z), 25)
+        # Division by J_t omitted: lambda' = (J_z - J_t) w_z = 6 lambda.
+        rate = (j_z - j_t) * w_z
+        self.assertEqual(self._margins(self._rate_model(rate)),
+                         [0, 7, 10, Fraction(165884358, 244140625)])
+        self.assertEqual(self._rate_derivative_margin(rate), 50)
+        # w_z omitted: lambda' = -2/3.  No sample phase is exact; the derivative is.
+        rate = (j_z - j_t) / j_t
+        self.assertEqual(self._margins(self._rate_model(rate)), [0, None, None, None])
+        self.assertEqual(self._rate_derivative_margin(rate), Fraction(20, 3))
+
+    def test_v_eom_04_mutation_c_frozen_transverse_components(self):
+        self.assertEqual(self._margins(self._rate_model(0)), [0, 7, 10, Fraction(156, 25)])
+        self.assertEqual(self._rate_derivative_margin(0), 10)
+
+    def test_v_eom_04_mutation_d_swapped_transverse_components(self):
+        c = self.C
+        swapped = [(w[1], w[0], w[2]) for w in c.OMEGA]
+        self.assertEqual(self._margins(swapped), [7, 3, 7, Fraction(23, 25)])
+
+    def test_v_eom_04_mutation_e_one_transverse_sign_reversed(self):
+        c = self.C
+        self.assertEqual(self._margins([(-w[0], w[1], w[2]) for w in c.OMEGA]),
+                         [4, 10, 4, Fraction(212, 25)])
+        self.assertEqual(self._margins([(w[0], -w[1], w[2]) for w in c.OMEGA]),
+                         [10, 4, 10, Fraction(166, 25)])
+
+    def test_v_eom_04_mutation_f_incorrect_omega_z_evolution(self):
+        c = self.C
+        w_x0, w_y0, w_z = c.OMEGA_0
+        # w_z perturbed by 1 rad/s in the output only.
+        self.assertEqual(self._margins([(w[0], w[1], w[2] + 1) for w in c.OMEGA]),
+                         [1, 1, 1, 1])
+        # w_z0 perturbed and propagated consistently into lambda (lambda' = -8/3).
+        w0_bad = (w_x0, w_y0, w_z + 1)
+        rate = (c.J_Z - c.J_T) / c.J_T * w0_bad[2]
+        self.assertEqual(self._margins(self._rate_model(rate, w0_bad)), [1, None, None, None])
+        self.assertEqual(self._rate_derivative_margin(rate, w0_bad), Fraction(10, 3))
+        # w_z made to oscillate like a transverse component.
+        self.assertEqual(
+            self._margins([(w[0], w[1], w_z * cs[0]) for w, cs in zip(c.OMEGA, c.COS_SIN)]),
+            [0, 3, 6, Fraction(54, 25)])
+        # Wrong symmetry axis: J = diag(J_z, J_t, J_t) applied to this z-symmetric case.
+        j_wrong = (c.J_Z, c.J_T, c.J_T)
+        gyro = _skew_cross(c.OMEGA_0, _diag_times(j_wrong, c.OMEGA_0))
+        w_dot_wrong = tuple(-g / j for g, j in zip(gyro, j_wrong))
+        self.assertEqual(w_dot_wrong, (0, 4, Fraction(20, 3)))
+        self.assertNotEqual(w_dot_wrong[2], 0, "the wrong axis makes w_z evolve")
+        self.assertNotEqual(_torque_free_residual(j_wrong, c.OMEGA_0, c.OMEGA_DOT[0]),
+                            (0, 0, 0))
+
+    def test_v_eom_04_mutation_g_incorrect_initial_angular_velocity(self):
+        c = self.C
+        w_x0, w_y0, w_z = c.OMEGA_0
+        for w0_bad in ((w_x0 + 1, w_y0, w_z), (w_x0, w_y0 + 1, w_z)):
+            with self.subTest(w0=w0_bad):
+                self.assertEqual(self._margins(self._rate_model(c.LAMBDA, w0_bad)),
+                                 [1, 1, 1, Fraction(24, 25)])
+                self.assertEqual(self._rate_derivative_margin(c.LAMBDA, w0_bad), 2)
+
+    def test_v_eom_04_mutation_h_incorrect_time_dependence(self):
+        c = self.C
+        w_x0, w_y0, w_z = c.OMEGA_0
+        # Phase lambda t / 2.  (Numerically the same function as -(J_z/J_t) w_z here.)
+        self.assertEqual(self._margins(self._rate_model(c.LAMBDA / 2)),
+                         [0, None, 7, Fraction(71, 25)])
+        # Cosine and sine exchanged in the closed form.
+        exchanged = [(w_x0 * s - w_y0 * co, w_y0 * s + w_x0 * co, w_z)
+                     for co, s in c.COS_SIN]
+        self.assertEqual(self._margins(exchanged), [7, 7, 7, Fraction(217, 25)])
+        # A value reported at the wrong sample time: every pair of samples must differ.
+        gaps = [max(abs(x - y) for x, y in zip(c.OMEGA[i], c.OMEGA[j]))
+                for i in range(4) for j in range(i + 1, 4)]
+        self.assertEqual(min(gaps), Fraction(33, 25))
+
+    def test_v_eom_04_incorrect_coupling_between_transverse_components(self):
+        """Both fail at pi/4 and atan(3/4); both are invisible at the half cycle."""
+        c = self.C
+        w_x0, w_y0, w_z = c.OMEGA_0
+        uncoupled = [(w_x0 * co, w_y0 * co, w_z) for co, _ in c.COS_SIN]
+        self.assertEqual(self._margins(uncoupled), [0, 5, 0, Fraction(24, 5)])
+        symmetric = [(w_x0 * co - w_y0 * s, w_y0 * co - w_x0 * s, w_z)
+                     for co, s in c.COS_SIN]
+        self.assertEqual(self._margins(symmetric), [0, 4, 0, Fraction(96, 25)])
+
+    def test_v_eom_04_mutation_i_spherical_body_trap(self):
+        """J_z = J_t: lambda = 0, the gyroscopic term vanishes for EVERY w, and the
+        frozen-transverse and sign-reversed mutations become the true solution."""
+        c = self.C
+        lam_spherical = (c.J_T - c.J_T) / c.J_T * c.OMEGA_0[2]
+        self.assertEqual(lam_spherical, 0)
+        self.assertEqual(-lam_spherical, lam_spherical)
+        for w in c.OMEGA:
+            self.assertEqual(_skew_cross(w, _diag_times((c.J_T, c.J_T, c.J_T), w)),
+                             (0, 0, 0))
+        self.assertNotEqual(_skew_cross(c.OMEGA_0, _diag_times(c.J_DIAG, c.OMEGA_0)),
+                            (0, 0, 0), "the frozen case must exercise the term")
+
+    def test_v_eom_04_mutation_j_zero_transverse_rate_trap(self):
+        """w_x0 = w_y0 = 0: every transverse model collapses onto the same zero answer."""
+        c = self.C
+        w0_trap = (Fraction(0), Fraction(0), c.OMEGA_0[2])
+        truth = self._rate_model(c.LAMBDA, w0_trap)
+        for rate in (-c.LAMBDA, 0, 3 * c.LAMBDA, -3 * c.LAMBDA, 6 * c.LAMBDA):
+            self.assertEqual(self._rate_model(rate, w0_trap), truth)
+        self.assertEqual(_skew_cross(w0_trap, _diag_times(c.J_DIAG, w0_trap)), (0, 0, 0))
+
+    def test_v_eom_04_left_handed_axis_relabelling_is_detected(self):
+        """Swapping x and z is a reflection.  It flips the cross product, so the
+        relabelled solution fails the Euler equations by exactly twice the gyroscopic
+        term.  (The cyclic relabelling passes: see the integrity class.)"""
+        c = self.C
+        j_reflected = (c.J_Z, c.J_T, c.J_T)
+        for k in range(4):
+            w, w_dot = c.OMEGA[k], c.OMEGA_DOT[k]
+            w_r, w_dot_r = (w[2], w[1], w[0]), (w_dot[2], w_dot[1], w_dot[0])
+            with self.subTest(sample=c.SAMPLE_TIMES_S[k]):
+                residual = _torque_free_residual(j_reflected, w_r, w_dot_r)
+                self.assertNotEqual(residual, (0, 0, 0))
+                self.assertEqual(residual,
+                                 _scale(2, _skew_cross(w_r, _diag_times(j_reflected, w_r))))
 
 
 if __name__ == "__main__":

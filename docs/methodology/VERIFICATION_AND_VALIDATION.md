@@ -40,8 +40,8 @@ this table said "verification tests written: none", which stopped being true at 
 |---|---|
 | Verified | **the frame and attitude conventions only** — V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01, against hand-derived anchors. Nothing else |
 | Validated | **nothing** |
-| Verification tests written | **63**: 63 passing, 0 failing, **0 skipped** — out of 65+ *specified* across RS-001…RS-008 |
-| Frozen analytical anchors, awaiting an implementation to consume them | **V-EOM-01**, **V-EOM-02**, **V-EOM-03** — established as exact oracles; no translational dynamics code exists |
+| Verification tests written | **94**: 94 passing, 0 failing, **0 skipped** — against 65+ test IDs *specified* across RS-001…RS-008 (not like-for-like: one specified ID is usually several test methods) |
+| Frozen analytical anchors, awaiting an implementation to consume them | **V-EOM-01**, **V-EOM-02**, **V-EOM-03** (translational) and **V-EOM-04** (rotational) — established as exact oracles; no translational or rotational dynamics code exists |
 | Independent reference data held | **none** |
 
 ### Translational EOM analytical anchors
@@ -75,7 +75,8 @@ and the force path without either masking the other.
 
 **The attitude in V-EOM-03 is a parameter of the analytical case, not a state being
 integrated** — no quaternion, Euler angle or angular rate is propagated, and no
-rotational equation appears. Rotational dynamics remain entirely unanchored.
+rotational equation appears. Rotational dynamics were entirely unanchored when V-EOM-03
+was frozen; V-EOM-04, below, is the first rotational anchor.
 
 *Case selection for V-EOM-03 was driven by discrimination analysis, not assumption.* Two
 constructions were rejected because each silently voids a required mutation: `m = 1`
@@ -100,6 +101,125 @@ transposed. Recorded rather than counted twice.
 55; independent derivation gives **70**, and 70 is what is frozen. The discrepancy is
 documented in the test module. Freezing 55 would have installed an arithmetically false
 oracle permanently.
+
+### Rotational EOM analytical anchor — V-EOM-04
+
+**V-EOM-04 — Torque-free axisymmetric coning.** The first rotational anchor, frozen in
+`tests/test_eom_anchors.py` **before** any rotational dynamics implementation exists.
+Governing equation: RS-004 §4.1 / ADR-0009 at constant inertia and zero moment,
+$\mathbf{J}\dot{\boldsymbol\omega} + \boldsymbol\omega\times(\mathbf{J}\boldsymbol\omega) = 0$,
+with $\boldsymbol\omega = \boldsymbol\omega^{B}_{B/I}$ and the skew form of NOTATION §5.
+
+`CALCULATION` — derived independently (2026-09-10) and executed as tests. With
+$\mathbf{J} = \mathrm{diag}(J_t, J_t, J_z)$:
+
+$$J_t\dot\omega_x + (J_z-J_t)\,\omega_y\omega_z = 0,\qquad
+J_t\dot\omega_y - (J_z-J_t)\,\omega_x\omega_z = 0,\qquad
+J_z\dot\omega_z = 0$$
+
+so $\omega_z$ is constant, $\dot\omega_x = -\lambda\omega_y$, $\dot\omega_y = \lambda\omega_x$ with
+$\lambda = \frac{J_z-J_t}{J_t}\,\omega_z$, and
+
+$$\omega_x(t) = \omega_{x0}\cos\lambda t - \omega_{y0}\sin\lambda t,\qquad
+\omega_y(t) = \omega_{y0}\cos\lambda t + \omega_{x0}\sin\lambda t.$$
+
+Cross-check: with $u = \omega_x + i\omega_y$, $\dot u = i\lambda u$, so $u(t) = u_0 e^{i\lambda t}$ —
+the same solution. A third, numerical check was run as a scratchpad analysis and **not
+committed**: integrating the full nonlinear equations, without assuming $\omega_z$ constant,
+reproduced the closed form to $1.3\times10^{-13}$ rad·s⁻¹ at every sample, while the
+reversed-sign form missed by up to 10 rad·s⁻¹.
+
+**What $\lambda$ is.** "Coning rate" names at least three different quantities:
+
+| Symbol | Rate of | Seen from | Value in the frozen case | Verified by V-EOM-04 |
+|---|---|---|---|---|
+| $\lambda = \frac{J_z-J_t}{J_t}\omega_z$ | the transverse $\boldsymbol\omega$ vector, positive right-handed about $+z_B$ | the **body** axes | $-2$ rad·s⁻¹ | **yes** |
+| $\sigma = -\lambda$ | the body, relative to the plane containing $\mathbf{h}$ and $z_B$ | that plane | $+2$ rad·s⁻¹ | only through the exact identity $\boldsymbol\omega = \mathbf{h}/J_t + \sigma\hat{z}_B$ |
+| $\lVert\mathbf{h}\rVert/J_t$ | $z_B$ precessing about the fixed angular momentum | **inertial** space | $\sqrt{30}\approx5.48$ rad·s⁻¹ | **no** — needs attitude propagation |
+
+**On the formula as originally stated — recorded, not silently replaced.** RS-004 §7 and §3.1
+below give $\lambda = \frac{J_z-J_t}{J_t}\omega_z$. `FINDING`: that formula is **correct in magnitude
+and sign** for the body-frame rate of the transverse angular velocity, with positive sense
+right-handed about $+z_B$. It was **incomplete** as stated: it gave no sign reference (and
+$\sigma = -\lambda$, the other natural reference, has the opposite sign); it did not say it is a
+body-frame rate rather than the inertial precession rate $\lVert\mathbf{h}\rVert/J_t$; and it
+presumes symmetry about $z$.
+
+`FINDING` — **axis labelling.** RS-004 §7 (this row), RS-004 §4.2, ADR-0009 and V-EOM-09 all
+describe a body "spinning at $\omega_z$ about its symmetry axis", but NOTATION §3 puts $x_B$
+along the vehicle's **longitudinal** axis, so a RADIUS vehicle is axisymmetric about $x_B$. The
+z-symmetric case remains a valid test of the equation, which does not care which axis is
+special, and is frozen as specified. The $x_B$-symmetric form a RADIUS vehicle will have is
+frozen beside it — $\mathbf{J} = \mathrm{diag}(2, 6, 6)$, $\boldsymbol\omega_0 = (3, 2, -5)$, same
+$\lambda$ — by the cyclic relabelling $(x,y,z)\to(y,z,x)$, a proper rotation. Relabelling by
+swapping two axes is a reflection; it flips the cross product and is shown to **fail**, which is
+the handedness check. The affected specification documents were not edited in this phase;
+flagged for researcher review.
+
+| Frozen case | |
+|---|---|
+| Inertia | $J_t = 6$, $J_z = 2$ kg·m² (prolate, $J_z/J_t = 1/3$) |
+| Initial rate | $\boldsymbol\omega_0 = (2, -5, 3)$ rad·s⁻¹ |
+| $\lambda$ | $-2$ rad·s⁻¹: the transverse rate **regresses** relative to the body |
+| Sample times | $0,\ \pi/4,\ \pi/2,\ \arctan(3/4)$ s, i.e. $\lambda t = 0,\ -\pi/2,\ -\pi,\ -2\arctan(3/4)$ |
+| $\boldsymbol\omega$ at the samples | $(2,-5,3)$, $(-5,-2,3)$, $(-2,5,3)$, $(-\tfrac{106}{25},-\tfrac{83}{25},3)$ |
+| $\dot{\boldsymbol\omega}$ at the samples | $(-10,-4,0)$, $(-4,10,0)$, $(10,4,0)$, $(-\tfrac{166}{25},\tfrac{212}{25},0)$ |
+| Invariants | $\lVert\boldsymbol\omega_t\rVert^2 = 29$, $\lVert\mathbf{h}\rVert^2 = 1080$, $2T = 192$ |
+
+All values are exact rationals; no floating-point tolerance is used in the anchor. The
+translational `FUTURE_COMPARISON_TOL` does **not** transfer: a rotational implementation must
+integrate numerically, so its tolerance must come from a measured convergence study (RS-005,
+V-NUM-01) in the phase that builds it.
+
+*Case selection was driven by exact discrimination analysis over ten candidates and 26
+mutations.* Each rejected construction voids at least one mutation: $J_z = J_t$ (λ = 0; eleven
+mutations invisible); zero transverse rate (21 invisible); $J_z/J_t = \tfrac12$ (the sign-slipped
+small-nutation inertial precession rate $-\frac{J_z}{J_t}\omega_z$ equals λ); $J_z/J_t = 2$
+(omitting the ratio is invisible); $J_t = 1$ (omitting the division is invisible); $\omega_z = 1$
+(omitting $\omega_z$ is invisible); $\omega_{x0} = 0$ (a symmetrically coupled solution is
+invisible); $\omega_{x0} = \omega_{y0}$ (a swap is invisible at $t=0$). The avoidances are
+asserted, and each trap is demonstrated, as tests.
+
+`LIMITATION` — blind spots, recorded rather than hidden:
+
+- **Samples at multiples of π/2 alias.** A wrong rate $\lambda' = -3\lambda$ — exactly
+  $\frac{J_t-J_z}{J_z}\omega_z$, with numerator and denominator both wrong — coincides with λ at
+  the quarter- **and** half-cycle samples. It is caught only by the $\arctan(3/4)$ sample, which is
+  incommensurate with π, and by $\dot{\boldsymbol\omega}(0)$. That is why that sample exists.
+- The half-cycle sample alone is also blind to $\lambda\to-\lambda$ and to both wrong-coupling
+  forms tested.
+- Some wrong rates ($\omega_z$ omitted, $\lVert\mathbf{h}\rVert/J_t$, a perturbed $\omega_{z0}$) land on
+  no exactly representable phase at any sample. They are detected **exactly** only through
+  $\dot{\boldsymbol\omega}(0)$; a future comparison of sampled trajectories would detect them in
+  floating point only.
+- $\frac{J_t-J_z}{J_t}\omega_z$ is numerically $-\lambda$, and a phase of $\lambda t/2$ is here the same
+  function as $-\frac{J_z}{J_t}\omega_z$. Each pair is counted once.
+
+Mutation evidence (2026-09-10; temporary copy, executed file verified per run, repository
+file never modified): control 63/63 pass in the module. A deliberately incorrect frozen
+$\boldsymbol\omega(\pi/4)$ fails 15 tests. Every one of 19 further mutations is detected — reversed λ
+literal (24 failures), oracle builder rotating the wrong way (12), λ from the wrong denominator
+(22), λ with $\omega_z$ omitted (24), frozen transverse components (12), swapped initial
+components (24), a reversed component sign (24), a perturbed initial rate (24), a wrong frozen
+$\omega_z$ (12), a non-zero $\dot\omega_z$ (7), the phase of $\arctan(4/3)$ frozen instead of
+$\arctan(3/4)$ (7), a reversed frozen derivative (13), the spherical trap (29), the
+zero-transverse trap (26), the $J_z/J_t = \tfrac12$ trap (27), the $J_t = 1$ trap (29), a
+left-handed skew form (26), and an $x_B$-symmetric literal built by reflection (1). No mutation
+caused a failure outside the V-EOM-04 classes.
+
+**What V-EOM-04 does not establish:** quaternion attitude propagation, the inertial precession
+rate, numerical integration, translational coupling, variable mass (V-EOM-09), products of
+inertia (V-EOM-05), or a complete 6-DOF simulation. It verifies an angular-velocity closed form
+for one limiting case; it validates nothing.
+
+`FINDING` — **identifier collision.** RS-004 §7 defines **V-EOM-03** as *torque-free, constant
+rate about a principal axis*; the frozen V-EOM-03 above is the body-force anchor named by its
+commissioning brief. The RS-004 case is unanchored and its identifier is now ambiguous. Not
+renumbered here — a traceability decision for the researcher.
+
+`FINDING` — **status wording.** RS-004 §4.3 marks the gyroscopic term, and the aerodynamic and
+propulsive moments, "**Implemented**", while RS-004's own header and this document record that
+no dynamics code exists. Flagged, not edited in this phase.
 
 ### Traceability — audit findings to their guarding anchors
 
@@ -150,7 +270,10 @@ implementation. Specified in RS-004 §7; anchors:
   that exercises the `T_IB` force transformation. **Frozen as exact oracles** in
   `tests/test_eom_anchors.py`; see §2.
 - **V-EOM-04** — torque-free axisymmetric coning at $\lambda = \frac{J_z-J_t}{J_t}\omega_z$; a
-  *quantitative* check on the gyroscopic term.
+  *quantitative* check on the gyroscopic term. **Frozen as an exact oracle** (§2). The formula
+  is correct for the **body-frame** transverse rate, positive right-handed about $+z_B$; it is
+  not the inertial precession rate, and it presumes symmetry about $z$ whereas a RADIUS
+  vehicle is symmetric about $x_B$ — both recorded in §2.
 - **V-EOM-06 / V-VM-01 — Tsiolkovsky.** $\Delta v = \lVert\mathbf{c}\rVert\ln(m_0/m_f)$: the only
   exact check on the variable-mass coupling, and derived independently of RADIUS's own derivation.
 - **V-ATT-02** — closed-form quaternion under constant body rate.
