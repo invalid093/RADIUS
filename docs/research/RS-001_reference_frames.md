@@ -1,6 +1,9 @@
 # RS-001 — Reference Frames
 
-**Status:** Specification. Not implemented, not verified.
+**Status:** Specification. **Partially implemented:** the body/inertial and wind-frame
+transformations exist in `radius/frames.py` and are verified by V-FRM-05, V-FRM-08, V-FRM-09 and
+V-FRM-10. The rest of this document — the ECEF frame, the flat-Earth validity domain — is
+specification only.
 **Depends on:** `docs/methodology/NOTATION_AND_CONVENTIONS.md`
 **Decides:** ADR-0003
 

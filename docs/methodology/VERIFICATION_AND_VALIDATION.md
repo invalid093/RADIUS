@@ -38,6 +38,7 @@ this table said "verification tests written: none", which stopped being true at 
 
 | | |
 |---|---|
+| Implemented | `radius/frames.py` (frame, Euler, quaternion→DCM and wind-frame transformations) and `radius/math/quaternion.py` (Hamilton product) — and nothing else. No dynamics, integrator, atmosphere, aerodynamic or trajectory code exists |
 | Verified | **the frame and attitude conventions only** — V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01, against hand-derived anchors. Nothing else |
 | Validated | **nothing** |
 | Verification tests written | **94**: 94 passing, 0 failing, **0 skipped** — against 65+ test IDs *specified* across RS-001…RS-008 (not like-for-like: one specified ID is usually several test methods) |

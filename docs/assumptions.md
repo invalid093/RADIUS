@@ -12,8 +12,12 @@ deleted**, because results whose manifests list it must remain traceable (`docs/
 | `VALIDATED` | Tested and held |
 | `REFUTED` | Tested and failed — consequences must be traced |
 
-**Every assumption below is `OPEN` or `TO-VERIFY`.** Nothing is implemented, so nothing has been
-tested. `FACT`.
+**Every assumption below is `OPEN` or `TO-VERIFY`.** `FACT`: the only implemented code is the
+frame and quaternion utilities (`radius/frames.py`, `radius/math/quaternion.py`), and the tests
+that would move an assumption to `VALIDATED` — those named in the **Action** column — belong to
+subsystems that do not exist yet. `A-NUM-05` is the closest: V-FRM-09 establishes its observable
+half only, which is recorded in `docs/methodology/VERIFICATION_AND_VALIDATION.md` §2 and is not
+enough to change its status. No status below has changed.
 
 **Revised 2026-09-09** by `docs/research/PRE_IMPLEMENTATION_MATHEMATICAL_AUDIT.md`: `A-VM-05` and
 `A-NUM-05` added; `A-VM-03` re-scoped after the rotational equation was corrected (ADR-0009);

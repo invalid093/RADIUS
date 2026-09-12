@@ -5,8 +5,12 @@
 *A physics-based nonlinear 6-DOF aerospace vehicle dynamics, simulation, and uncertainty-analysis
 framework.*
 
-**Status: Research / Architecture Phase.** No simulation code has been written. Nothing in this
-repository has been verified or validated. See [Current status](#current-status).
+**Status: Research / Architecture** — foundations implemented and verified; 6-DOF dynamics
+specified with verification anchors, not yet implemented. Reference-frame transformations and
+quaternion algebra exist in `radius/` and are verified against hand-derived anchors. The
+simulator itself does not: its equations are specified and carry frozen analytical anchors, but
+no dynamics, integrator, atmosphere or aerodynamic code has been written. Nothing is validated.
+The project is actively developed. See [Current status](#current-status).
 
 ---
 
@@ -83,14 +87,16 @@ See `docs/architecture/AURA_INTERFACE.md`.
 
 ## Current status
 
-**Research / Architecture Phase.**
+**Research / Architecture** — foundations implemented and verified; 6-DOF dynamics specified
+with verification anchors, not yet implemented (`docs/methodology/PUBLICATION_POLICY.md` §11).
 
 | | |
 |---|---|
 | Researched | frames, attitude, state, equations of motion, numerical integration, atmosphere, aerodynamics, variable mass — `docs/research/` |
 | Designed | software architecture, provenance, publication governance, conceptual AURA interface |
-| Implemented | **nothing** — no source code exists |
-| Verified | **nothing** — ~60 tests are *specified*; none written |
+| Implemented | **foundations only** — reference-frame, Euler, quaternion→DCM and wind-frame transformations (`radius/frames.py`) and the Hamilton quaternion product (`radius/math/quaternion.py`), each exercised by named tests. No dynamics, integrator, atmosphere, aerodynamic, propulsion or trajectory code exists |
+| Verified | **the frame and attitude conventions only** — V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01, against hand-derived anchors. 94 tests run, 94 pass, 0 skipped |
+| Verification anchors frozen | **V-EOM-01 … V-EOM-04** — exact analytical oracles for the translational and rotational equations of motion, frozen *before* the code they will test (`tests/test_eom_anchors.py`) |
 | Validated | **nothing**, and no path to validation currently exists |
 
 The specification passes its own [quality gate](docs/research/QUALITY_GATE.md) for Phases 2–6
@@ -101,10 +107,9 @@ hypothetical vehicle. That gap is recorded rather than worked around.
 Explicitly:
 
 - There is no simulator yet. There are no results. There are no figures.
-- Nothing here is validated. When implementation begins, *verification* ("did we implement the
-  equations correctly?") and *validation* ("does the model represent reality well enough for the
-  intended purpose?") will be reported as distinct claims, and passing unit tests will not be
-  described as validation.
+- Nothing here is validated. *Verification* ("did we implement the equations correctly?") and
+  *validation* ("does the model represent reality well enough for the intended purpose?") are
+  reported as distinct claims, and passing unit tests are never described as validation.
 - RADIUS makes no claim of flight-ready, operationally valid, or real-world-deployable performance,
   and will not make one on the strength of self-consistent simulation.
 
@@ -121,6 +126,8 @@ RADIUS/
 │   ├── architecture/    software architecture; conceptual AURA interface
 │   ├── methodology/     notation and conventions; V&V strategy; publication policy
 │   └── decisions/       ADRs — decisions with rationale, alternatives, and revisit criteria
+├── radius/              implemented source: `frames.py`, `math/quaternion.py`
+├── tests/               verification tests, including the frozen analytical anchors
 ├── infrastructure/
 │   └── publication_checklist.md   pre-push audit
 ├── research/
@@ -133,9 +140,10 @@ RADIUS/
 **Start here:** [`docs/research/README.md`](docs/research/README.md) — the mathematical specification
 and its quality-gate verdict.
 
-Implementation directories (`radius/`, `experiments/`, `validation/`, `tests/`, `results/`,
-`handoffs/`) are **not created yet**. They arrive with the phase that fills them, so that the tree
-describes what exists rather than what is intended. See `docs/decisions/ADR-0001`.
+`radius/`, `tests/` and `handoffs/` exist because the phases that fill them have run.
+`experiments/`, `validation/` and `results/` are **not created yet**: a directory arrives with the
+phase that fills it, so the tree describes what exists rather than what is intended. See
+`docs/decisions/ADR-0001`.
 
 ## What is published here, and what is not
 
@@ -161,13 +169,22 @@ numerical integration → analytical verification → atmosphere → aerodynamic
 abstraction → trajectory simulation → navigation → guidance/control → uncertainty propagation →
 possible AURA interface.
 
-The project is at step 1. No step is skipped, and no subsystem is implemented before its
-mathematical formulation, assumptions and verification strategy are documented.
+The project is at step 2. The research specification is complete for Phases 2–6, frames and math
+utilities are implemented and verified, and the analytical verification anchors for the equations
+of motion are frozen ahead of the code they will test. No step is skipped, and no subsystem is
+implemented before its mathematical formulation, assumptions and verification strategy are
+documented.
 
 ## Reproducing
 
-Nothing to run yet. When there is, dependencies will be kept minimal (Python, `numpy`, `PyYAML`
-unless a further dependency is justified), every stochastic component will take an explicit seed, and
+The verification suite runs today, from the repository root:
+
+```bash
+python -m unittest discover -s tests -t tests
+```
+
+There is no simulation to run yet. Dependencies are kept minimal (Python, `numpy`, `PyYAML` unless
+a further dependency is justified), every stochastic component will take an explicit seed, and
 every result will trace to configuration + seed + commit.
 
 Reproducibility is claimed precisely, not loosely: **bitwise-identical output on the same platform

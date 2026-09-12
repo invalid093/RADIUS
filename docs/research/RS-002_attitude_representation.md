@@ -1,6 +1,9 @@
 # RS-002 — Attitude Representation
 
-**Status:** Specification. Not implemented, not verified.
+**Status:** Specification. **Partially implemented:** the Hamilton scalar-first quaternion product
+(`radius/math/quaternion.py`) and $\mathbf{T}_{BI}(q)$ (`radius/frames.py`) are verified by
+V-FRM-08, V-FRM-09, V-FRM-10 and V-ATT-01. Attitude **propagation**, norm maintenance and Euler
+extraction are specified and not yet implemented.
 **Depends on:** RS-001, `docs/methodology/NOTATION_AND_CONVENTIONS.md`
 **Decides:** ADR-0004
 

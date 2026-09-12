@@ -397,3 +397,41 @@ The V-EOM-04 identifier rename was checked three ways:
 **NEXT STEP.** Researcher decision on the project maturity label, followed by correction of the stale
 status statements ADR-0010 lists, so that the public record neither over- nor under-states what
 exists before rotational dynamics code is written.
+
+---
+
+## 2026-09-12 · RL-0014 — Project maturity label scoped; stale "nothing exists" statements corrected
+
+**DECISION.** ADR-0011. RADIUS keeps the **Research / Architecture** label of PUBLICATION_POLICY §11,
+stated with its scope — *foundations implemented and verified; 6-DOF dynamics specified with
+verification anchors, not yet implemented*. §11's first row is widened to admit verified foundational
+utilities, project-level maturity and ADR-0010's component status are declared distinct vocabularies,
+and the criteria for the next label are fixed in advance. Current-status statements claiming that no
+source code exists were corrected; dated records were not.
+
+**RATIONALE.** §11 forbids misrepresenting maturity and does not limit that to overstatement. Since
+Phase 2B the README had told a reader that nothing was implemented and nothing verified, while
+`radius/frames.py` and `radius/math/quaternion.py` were carrying 94 passing tests. The obvious repair
+— promoting the project to **Preliminary** — would have been the opposite error, because that label
+says a model exists and is partly verified, and RADIUS has no simulator. Scoping the existing label
+was the only option that states both facts at once. Fixing the promotion criteria now, before there
+are results to flatter, is the same discipline the project applies to tolerances.
+
+**EVIDENCE.** `FACT`, 2026-09-12: `radius/` contains `frames.py` and `math/quaternion.py` and nothing
+else; `python -m unittest discover -s tests -t tests` reports **94 executed / 94 passed / 0 failed /
+0 skipped**; V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10 and V-ATT-01 exercise those modules; V-EOM-01 …
+V-EOM-04 are frozen oracles with no implementation to consume them; no dynamics, integrator,
+atmosphere, aerodynamic, propulsion or trajectory code exists.
+
+**IMPACT.**
+
+- **Corrected** (current statements only): README; `handoffs/current_state.md`; the assumptions
+  register header; the research index; the NOTATION, RS-001, RS-002 and ARCHITECTURE headers;
+  PUBLICATION_POLICY §11; the V&V status table, which now carries an explicit **Implemented** row.
+- **Unchanged:** every ADR from 0001 to 0010, the pre-implementation audit, the quality-gate verdict,
+  RL-0001 … RL-0013, all V-EOM oracles and identifiers, the ADR-0010 notation, every test, and every
+  assumption status. Q8 remains open.
+- No production code was touched and no dependency added.
+
+**NEXT STEP.** Await review. Begin the next scientific phase only after this documentation
+reconciliation is accepted; do not start V-EOM-05 unless explicitly authorised.

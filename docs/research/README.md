@@ -1,7 +1,9 @@
 # RADIUS — Research Specification
 
-The mathematical specification of the RADIUS simulator, written **before** implementation. Nothing
-described here is implemented, verified or validated.
+The mathematical specification of the RADIUS simulator, written **before** implementation. The
+frame and attitude conventions are now implemented and verified (`radius/frames.py`,
+`radius/math/quaternion.py`); every other subsystem described here is specified and **not yet
+implemented**. Nothing described here is validated.
 
 Read in order; each document depends on the ones above it.
 

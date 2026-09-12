@@ -1,6 +1,9 @@
 # RADIUS — Notation, Units and Sign Conventions
 
-**Status:** Specification. Nothing here is implemented.
+**Status:** Specification. The transformation conventions of §3–§4 — frames, the Euler sequence,
+the quaternion convention and the wind frame — are implemented and verified (`radius/frames.py`,
+`radius/math/quaternion.py`; V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01). Everything else
+here is specification only.
 **Authority:** This document is the single place where these conventions are fixed. Every other
 document and every module defers to it. If code and this document disagree, the code is wrong.
 

@@ -1,6 +1,8 @@
 # RADIUS — Software Architecture
 
-**Status:** Design. Not implemented.
+**Status:** Design. **Partially implemented:** `radius/frames.py` and `radius/math/quaternion.py`
+exist and follow the module rules below. The simulation pipeline — dynamics, integrator,
+environment, events, recording — is not implemented.
 **Depends on:** RS-001 … RS-008
 
 ---

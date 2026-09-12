@@ -265,14 +265,24 @@ The repository may be public while incomplete. What it may not do is misrepresen
 
 | Label | Meaning |
 |---|---|
-| **Research / Architecture** | Specification only. Nothing implemented |
+| **Research / Architecture** | Specification, with at most foundational utilities implemented and verified. The model the project exists to build is not implemented |
 | **Experimental** | Implemented, unverified. No claim supportable |
 | **Preliminary** | Implemented, partially verified. Claims provisional and scoped |
 | **Verified** | Implementation demonstrated to solve the intended equations correctly, by stated tests |
 | **Validated** | Model demonstrated adequate against **independent reference data**, for a **stated purpose**, to a **stated tolerance** |
 
 "Validated" is never applied on the strength of passing tests. RADIUS's current label is **Research /
-Architecture**, and the README states it.
+Architecture**, and the README states it **scoped**: *foundations implemented and verified; 6-DOF
+dynamics specified with verification anchors, not yet implemented*.
+
+**Project label versus component status.** This table labels the **project** — specifically the
+model it exists to build. Individual terms, subsystems and verification cases carry the finer
+component statuses of ADR-0010 §5: *Specified*, *Analytically verified*, *Verification anchor
+established*, *Partially implemented*, *Implemented*, *Not yet implemented*, *Omitted*. A project
+keeps the **Research / Architecture** label while only foundational utilities are implemented,
+however well verified those are, and moves to **Experimental** or **Preliminary** when the model
+itself runs. Misrepresentation runs in both directions: claiming more than exists, and continuing
+to claim that nothing exists after it does. See ADR-0011.
 
 ---
 
