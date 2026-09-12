@@ -1,4 +1,4 @@
-"""V-EOM-01 to V-EOM-04 — frozen analytical anchors for the equations of motion.
+"""V-EOM-01 to V-EOM-05 — frozen analytical anchors for the equations of motion.
 
 WHAT THIS FILE IS
 -----------------
@@ -19,6 +19,11 @@ code, because there is none to verify.
 **V-EOM-04** adds the first *rotational* anchor -- torque-free axisymmetric coning --
 frozen before any rotational dynamics implementation exists.  It lives in its own
 section below, with its own derivation, and shares only the exact-arithmetic helpers.
+
+**V-EOM-05** is the products-of-inertia anchor: a torque-free body whose body axes are
+NOT principal axes, so the off-diagonal terms of the inertia tensor genuinely drive the
+answer.  It freezes an instantaneous angular acceleration, not a trajectory -- an
+asymmetric torque-free body has no elementary closed form.
 
 GOVERNING EQUATION (RS-004, already audited)
 --------------------------------------------
@@ -1512,6 +1517,472 @@ class TestVEOM04Discrimination(unittest.TestCase):
                 self.assertNotEqual(residual, (0, 0, 0))
                 self.assertEqual(residual,
                                  _scale(2, _skew_cross(w_r, _diag_times(j_reflected, w_r))))
+
+
+# ======================================================================================
+# V-EOM-05 — Torque-free rigid body whose BODY AXES ARE NOT PRINCIPAL AXES.
+# ======================================================================================
+#
+# WHY THIS ANCHOR WAS REPAIRED
+# ----------------------------
+# RS-004 sec 7 originally configured V-EOM-05 as "principal moments J_xx < J_yy < J_zz,
+# all distinct" while claiming the case isolates *products of inertia* and full-tensor
+# handling.  Those two statements contradict each other: principal moments on the body
+# axes mean a DIAGONAL tensor, whose three products of inertia are identically zero.  An
+# implementation that dropped J_xy, J_xz and J_yz entirely, or that diagonalised J before
+# using it, reproduced that case exactly.
+#
+# The defect was in the CASE, not in the equation: RS-004 sec 4.3 already requires a full
+# symmetric tensor, "because the products of inertia are exactly what couple the axes".
+# This anchor supplies a case in which they do.
+#
+# WHAT THIS ANCHOR IS -- AND IS NOT
+# ---------------------------------
+# A torque-free asymmetric body has NO elementary closed-form trajectory (the solution runs
+# on Jacobi elliptic functions), so no trajectory is frozen here and none should be.  What
+# is frozen is the INSTANTANEOUS angular acceleration at two known states, which is an
+# exact rational quantity, plus the invariant-rate conditions that hold at any state:
+#
+#     J wdot + w x (J w) = 0      (RS-004 sec 4.1, ADR-0009, zero external moment)
+#     wdot = -J^-1 [ w x (J w) ]
+#
+# A future implementation must reproduce wdot at both states from J and w alone.
+#
+# WHEN IS A TENSOR A REAL BODY?  THREE CONDITIONS, NOT TWO
+# --------------------------------------------------------
+# 1. symmetric;
+# 2. positive definite -- Sylvester: leading principal minors all > 0;
+# 3. the principal moments satisfy the triangle inequalities, J_i + J_j >= J_k.
+#
+# Condition 3 is the one that is easy to forget, and a tensor can satisfy 1 and 2 while
+# failing it: diag-dominant [[10,2,1],[2,8,3],[1,3,6]] is symmetric positive definite, yet
+# its principal moments violate the triangle inequality, so no rigid body has it.  The
+# check is exact without computing eigenvalues: the eigenvalues of
+#
+#     S = (tr(J)/2) I - J
+#
+# are (J_i + J_j - J_k)/2, so S positive definite is equivalent to the strict triangle
+# inequalities.  Both minor sets are asserted below.
+#
+# THE FROZEN CASE (kg m^2, rad/s, rad/s^2), chosen by mutation analysis
+# ---------------------------------------------------------------------
+#     J = [[ 8, -1, -2],
+#          [-1,  7, -3],
+#          [-2, -3,  5]]      symmetric; leading minors (8, 55, 163); det 163
+#                             S minors (2, 5, 7) -> strict triangle inequalities
+#                             principal moments ~ (2.0205, 8.6111, 9.3684),
+#                             condition number ~ 4.64, and the eigenvectors lie nowhere
+#                             near the body axes -- which is the entire point.
+#
+#     Diagonal entries 8, 7, 5 are distinct; products -1, -2, -3 are all non-zero with
+#     distinct magnitudes; no value repeats anywhere in the tensor.
+#
+#     state 0:  w = ( 4, -6,  7)   ->   wdot = (-18,   9,  23)
+#     state 1:  w = ( 7, -5, -8)   ->   wdot = (-12,  31, -38)
+#
+# Every frozen number is an integer even though det J = 163 is prime -- which is itself a
+# check worth having, since almost any transcription slip makes wdot fractional.
+#
+# HAND DERIVATION, state 0 (reproduce it in a few lines of arithmetic)
+# --------------------------------------------------------------------
+#     J w  = ( 8(4) + (-1)(-6) + (-2)(7),
+#             (-1)(4) +   7(-6) + (-3)(7),
+#             (-2)(4) + (-3)(-6) +  5(7) )                    = ( 24, -67,  45)
+#
+#     w x (J w) = ( (-6)(45) - (7)(-67),
+#                    (7)(24) - (4)(45),
+#                    (4)(-67) - (-6)(24) )                    = ( 199, -12, -124)
+#
+#     so the right-hand side  -(w x (J w))                    = (-199,  12,  124)
+#     and J wdot = (-199, 12, 124) is solved by wdot          = ( -18,   9,   23)
+#
+# The last step is checked in both directions below: the frozen wdot is substituted back
+# into J wdot, and it is independently re-derived by Cramer's rule.
+#
+# CASE-SELECTION TRAP, found by analysis and asserted below
+# ---------------------------------------------------------
+# A tensor whose three products are all POSITIVE cannot detect the mutation "replace each
+# product by its absolute value" -- that mutation is then the identity.  The chosen tensor
+# has all three products negative, so |.| flips all three and is detected.  (A candidate
+# with products (+1/2, +3, +1) was rejected for exactly this reason.)
+#
+# STRUCTURAL BLIND SPOTS -- properties of the equation, not of this case
+# ----------------------------------------------------------------------
+# * transposing J is a no-op, because J is symmetric;
+# * w -> -w leaves wdot unchanged, because wdot is quadratic in w;
+# * J -> kJ leaves wdot unchanged, because J^-1 and J cancel.
+# All three are asserted below as facts, so that nobody later mistakes them for coverage.
+#
+# SCOPE.  This anchor verifies one instantaneous derivative, twice, and the invariant
+# rates.  It does not verify a trajectory, an integrator, attitude propagation, variable
+# mass, or a complete 6-DOF simulation.  No production rotational-dynamics implementation
+# exists for it to test.
+# ======================================================================================
+
+
+def _det3(m):
+    """Determinant of a 3x3 rational matrix, by cofactor expansion along the first row."""
+    return (m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+            - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+            + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]))
+
+
+def _leading_minors(m):
+    """The three leading principal minors -- Sylvester's criterion for definiteness."""
+    return (m[0][0], m[0][0] * m[1][1] - m[0][1] * m[1][0], _det3(m))
+
+
+def _triangle_matrix(j):
+    """``S = (tr(J)/2) I - J``; its eigenvalues are ``(J_i + J_j - J_k)/2``."""
+    half_trace = (j[0][0] + j[1][1] + j[2][2]) / 2
+    return [[(half_trace if i == k else Fraction(0)) - j[i][k] for k in range(3)]
+            for i in range(3)]
+
+
+def _inverse3(m):
+    """Exact inverse as adjugate / determinant."""
+    determinant = _det3(m)
+    cofactor = [[(m[(i + 1) % 3][(k + 1) % 3] * m[(i + 2) % 3][(k + 2) % 3]
+                  - m[(i + 1) % 3][(k + 2) % 3] * m[(i + 2) % 3][(k + 1) % 3])
+                 for k in range(3)] for i in range(3)]
+    return [[cofactor[k][i] / determinant for k in range(3)] for i in range(3)]
+
+
+def _diagonalised(j):
+    """``J`` with its products of inertia deleted -- NOT a principal-axis rotation."""
+    return [[j[i][k] if i == k else Fraction(0) for k in range(3)] for i in range(3)]
+
+
+def _full_torque_free_residual(j, w, w_dot):
+    """``J wdot + w x (J w)`` for a full tensor; zero on any torque-free solution."""
+    return _add(_matvec(j, w_dot), _skew_cross(w, _matvec(j, w)))
+
+
+def _omega_dot_torque_free(j, w):
+    """``wdot = -J^-1 [w x (J w)]`` -- the adjugate route."""
+    return _matvec(_inverse3(j), _scale(-1, _skew_cross(w, _matvec(j, w))))
+
+
+def _omega_dot_by_cramer(j, w):
+    """The same derivative by Cramer's rule, written out as scalar expressions.
+
+    Deliberately shares no helper with :func:`_omega_dot_torque_free`: no matrix product,
+    no adjugate, no cross-product helper.  Two routes to one number is the point.
+    """
+    a11, a12, a13 = j[0][0], j[0][1], j[0][2]
+    a22, a23 = j[1][1], j[1][2]
+    a33 = j[2][2]
+    p, q, r = w
+
+    h1 = a11 * p + a12 * q + a13 * r          # J is symmetric: a21 = a12, a31 = a13,
+    h2 = a12 * p + a22 * q + a23 * r          # a32 = a23
+    h3 = a13 * p + a23 * q + a33 * r
+
+    b1 = -(q * h3 - r * h2)                   # b = -(w x (J w))
+    b2 = -(r * h1 - p * h3)
+    b3 = -(p * h2 - q * h1)
+
+    def d3(m11, m12, m13, m21, m22, m23, m31, m32, m33):
+        return (m11 * (m22 * m33 - m23 * m32)
+                - m12 * (m21 * m33 - m23 * m31)
+                + m13 * (m21 * m32 - m22 * m31))
+
+    determinant = d3(a11, a12, a13, a12, a22, a23, a13, a23, a33)
+    return (d3(b1, a12, a13, b2, a22, a23, b3, a23, a33) / determinant,
+            d3(a11, b1, a13, a12, b2, a23, a13, b3, a33) / determinant,
+            d3(a11, a12, b1, a12, a22, b2, a13, a23, b3) / determinant)
+
+
+class VEOM05NonPrincipalBodyAxes:
+    """V-EOM-05 — torque-free body whose body axes are not principal axes. Frozen oracle.
+
+    The tensor is resolved in **body axes** (NOTATION sec 5.1): `J_xx`, `J_yy`, `J_zz` on
+    the diagonal and the products of inertia `J_xy`, `J_xz`, `J_yz` off it, with the
+    standard sign convention in which the tensor is
+
+        J = [[ Jxx, Jxy, Jxz], [ Jxy, Jyy, Jyz], [ Jxz, Jyz, Jzz]]
+
+    and the products enter `J w` with a PLUS sign.  (Some texts define products of inertia
+    with a leading minus; RADIUS does not.  The convention is fixed by this literal and by
+    the hand derivation in the section comment above.)
+
+    This case says nothing about the x_B symmetry-axis convention of ADR-0010: an
+    axisymmetric vehicle is the *special* case in which the products vanish and
+    `J_xx = J_parallel`, `J_yy = J_zz = J_perp`.  Here they deliberately do not vanish,
+    which is what an asymmetric body, or a symmetric one whose structure is misaligned
+    with the body frame, actually looks like.
+    """
+
+    J = [[Fraction(8), Fraction(-1), Fraction(-2)],
+         [Fraction(-1), Fraction(7), Fraction(-3)],
+         [Fraction(-2), Fraction(-3), Fraction(5)]]
+    DETERMINANT = Fraction(163)
+    LEADING_MINORS = (Fraction(8), Fraction(55), Fraction(163))
+    TRIANGLE_MINORS = (Fraction(2), Fraction(5), Fraction(7))
+
+    # state 0
+    OMEGA_0 = _v(4, -6, 7)
+    ANGULAR_MOMENTUM_0 = _v(24, -67, 45)
+    RIGHT_HAND_SIDE_0 = _v(-199, 12, 124)          # -(w x (J w))
+    OMEGA_DOT_0 = _v(-18, 9, 23)
+    ANGULAR_MOMENTUM_SQ_0 = Fraction(7090)
+    TWICE_KINETIC_ENERGY_0 = Fraction(813)
+    OMEGA_DOT_IF_PRODUCTS_DELETED_0 = (Fraction(-21, 2), Fraction(-12), Fraction(-24, 5))
+    PRODUCTS_GAP_0 = Fraction(139, 5)
+
+    # state 1 — not a scalar multiple of state 0, so a hard-coded derivative fails
+    OMEGA_1 = _v(7, -5, -8)
+    ANGULAR_MOMENTUM_1 = _v(77, -18, -39)
+    RIGHT_HAND_SIDE_1 = _v(-51, 343, -259)
+    OMEGA_DOT_1 = _v(-12, 31, -38)
+    ANGULAR_MOMENTUM_SQ_1 = Fraction(7774)
+    TWICE_KINETIC_ENERGY_1 = Fraction(941)
+    OMEGA_DOT_IF_PRODUCTS_DELETED_1 = _v(10, 24, -7)
+    PRODUCTS_GAP_1 = Fraction(31)
+
+    STATES = ((OMEGA_0, ANGULAR_MOMENTUM_0, RIGHT_HAND_SIDE_0, OMEGA_DOT_0,
+               ANGULAR_MOMENTUM_SQ_0, TWICE_KINETIC_ENERGY_0,
+               OMEGA_DOT_IF_PRODUCTS_DELETED_0, PRODUCTS_GAP_0),
+              (OMEGA_1, ANGULAR_MOMENTUM_1, RIGHT_HAND_SIDE_1, OMEGA_DOT_1,
+               ANGULAR_MOMENTUM_SQ_1, TWICE_KINETIC_ENERGY_1,
+               OMEGA_DOT_IF_PRODUCTS_DELETED_1, PRODUCTS_GAP_1))
+
+
+class TestVEOM05AnchorIntegrity(unittest.TestCase):
+    """The frozen V-EOM-05 oracle is internally consistent, in exact arithmetic.
+
+    Nothing here imports ``radius``, and no production rotational-dynamics code exists to
+    import.  Every test name carries ``v_eom_05`` so none can shadow another.
+    """
+
+    C = VEOM05NonPrincipalBodyAxes
+
+    def test_v_eom_05_inertia_tensor_is_symmetric(self):
+        j = self.C.J
+        for i in range(3):
+            for k in range(3):
+                with self.subTest(entry=(i, k)):
+                    self.assertEqual(j[i][k], j[k][i],
+                                     "V-EOM-05: the inertia tensor must be symmetric.")
+
+    def test_v_eom_05_inertia_tensor_is_positive_definite(self):
+        """Sylvester's criterion, exactly: every leading principal minor is positive."""
+        minors = _leading_minors(self.C.J)
+        self.assertEqual(minors, self.C.LEADING_MINORS)
+        for order, minor in enumerate(minors, start=1):
+            with self.subTest(order=order):
+                self.assertGreater(minor, 0, "V-EOM-05: J must be positive definite.")
+        self.assertEqual(_det3(self.C.J), self.C.DETERMINANT)
+
+    def test_v_eom_05_inertia_tensor_satisfies_the_triangle_inequalities(self):
+        """A symmetric positive-definite tensor is not automatically a real body.
+
+        The principal moments must also satisfy J_i + J_j >= J_k, which holds exactly when
+        ``S = (tr(J)/2) I - J`` is positive semidefinite.  Here it is strictly definite.
+        """
+        minors = _leading_minors(_triangle_matrix(self.C.J))
+        self.assertEqual(minors, self.C.TRIANGLE_MINORS)
+        for order, minor in enumerate(minors, start=1):
+            with self.subTest(order=order):
+                self.assertGreater(minor, 0)
+        # ...and a tensor that passes positive definiteness yet fails this must be rejected.
+        not_a_body = [[Fraction(10), Fraction(2), Fraction(1)],
+                      [Fraction(2), Fraction(8), Fraction(3)],
+                      [Fraction(1), Fraction(3), Fraction(6)]]
+        self.assertTrue(all(x > 0 for x in _leading_minors(not_a_body)))
+        self.assertFalse(all(x > 0 for x in _leading_minors(_triangle_matrix(not_a_body))),
+                         "the counter-example must fail the triangle inequalities")
+
+    def test_v_eom_05_products_of_inertia_are_non_zero_and_distinct(self):
+        j = self.C.J
+        products = (j[0][1], j[0][2], j[1][2])
+        diagonal = (j[0][0], j[1][1], j[2][2])
+        for name, value in zip(("J_xy", "J_xz", "J_yz"), products):
+            with self.subTest(product=name):
+                self.assertNotEqual(value, 0,
+                                    "V-EOM-05 exists to exercise the products of inertia.")
+        self.assertEqual(len({abs(x) for x in products}), 3)
+        self.assertEqual(len(set(diagonal)), 3)
+        self.assertEqual(len({abs(x) for x in products} | {abs(x) for x in diagonal}), 6)
+
+    def test_v_eom_05_body_axes_are_not_principal_axes(self):
+        """If a body axis were principal, ``J e`` would be parallel to ``e``."""
+        for axis in range(3):
+            basis = [Fraction(1) if i == axis else Fraction(0) for i in range(3)]
+            image = _matvec(self.C.J, basis)
+            off_axis = [image[i] for i in range(3) if i != axis]
+            with self.subTest(axis="xyz"[axis]):
+                self.assertNotEqual(off_axis, [Fraction(0), Fraction(0)],
+                                    "V-EOM-05 requires body axes that are NOT principal.")
+
+    def test_v_eom_05_frozen_angular_momentum_and_right_hand_side(self):
+        for index, state in enumerate(self.C.STATES):
+            w, h, rhs = state[0], state[1], state[2]
+            with self.subTest(state=index):
+                self.assertEqual(_matvec(self.C.J, w), h, "V-EOM-05: h = J w.")
+                self.assertEqual(_scale(-1, _skew_cross(w, h)), rhs,
+                                 "V-EOM-05: the right-hand side is -(w x (J w)).")
+
+    def test_v_eom_05_frozen_derivative_satisfies_the_euler_equations(self):
+        for index, state in enumerate(self.C.STATES):
+            w, w_dot = state[0], state[3]
+            with self.subTest(state=index):
+                self.assertEqual(_full_torque_free_residual(self.C.J, w, w_dot), (0, 0, 0),
+                                 "V-EOM-05: J wdot + w x (J w) must vanish exactly.")
+                self.assertEqual(_matvec(self.C.J, w_dot), state[2],
+                                 "V-EOM-05: J wdot must equal the frozen right-hand side.")
+
+    def test_v_eom_05_derivative_matches_two_independent_calculations(self):
+        """Adjugate inverse versus Cramer's rule -- no shared helper between them."""
+        for index, state in enumerate(self.C.STATES):
+            w, w_dot = state[0], state[3]
+            with self.subTest(state=index):
+                self.assertEqual(_omega_dot_torque_free(self.C.J, w), w_dot)
+                self.assertEqual(_omega_dot_by_cramer(self.C.J, w), w_dot)
+
+    def test_v_eom_05_invariant_rates_vanish_exactly(self):
+        """``d|h|^2/dt = 2 h . (J wdot)`` and ``d(2T)/dt = 2 w . (J wdot)``, both zero."""
+        for index, state in enumerate(self.C.STATES):
+            w, h, w_dot, h_sq, twice_t = state[0], state[1], state[3], state[4], state[5]
+            j_w_dot = _matvec(self.C.J, w_dot)
+            with self.subTest(state=index):
+                self.assertEqual(sum(x * y for x, y in zip(h, j_w_dot)), 0)
+                self.assertEqual(sum(x * y for x, y in zip(w, j_w_dot)), 0)
+                self.assertEqual(sum(x * x for x in h), h_sq)
+                self.assertEqual(sum(x * y for x, y in zip(w, h)), twice_t)
+
+    def test_v_eom_05_products_of_inertia_change_the_derivative(self):
+        """The claim the original configuration could not support."""
+        for index, state in enumerate(self.C.STATES):
+            w, w_dot, deleted, gap = state[0], state[3], state[6], state[7]
+            with self.subTest(state=index):
+                without = _omega_dot_torque_free(_diagonalised(self.C.J), w)
+                self.assertEqual(without, deleted)
+                self.assertNotEqual(without, w_dot)
+                self.assertEqual(max(abs(x - y) for x, y in zip(without, w_dot)), gap)
+
+    def test_v_eom_05_the_two_states_are_independent(self):
+        c = self.C
+        self.assertNotEqual(c.OMEGA_DOT_0, c.OMEGA_DOT_1)
+        ratios = {c.OMEGA_1[i] / c.OMEGA_0[i] for i in range(3)}
+        self.assertGreater(len(ratios), 1,
+                           "state 1 must not be a scalar multiple of state 0")
+        for w in (c.OMEGA_0, c.OMEGA_1):
+            self.assertNotIn(0, w)
+            self.assertNotIn(1, [abs(x) for x in w])
+            self.assertEqual(len({abs(x) for x in w}), 3)
+
+    def test_v_eom_05_anchor_rejects_a_deliberately_incorrect_oracle(self):
+        c = self.C
+        wrong = _add(c.OMEGA_DOT_0, _v(1, 0, 0))
+        self.assertNotEqual(_full_torque_free_residual(c.J, c.OMEGA_0, wrong), (0, 0, 0))
+        self.assertNotEqual(_matvec(c.J, wrong), c.RIGHT_HAND_SIDE_0)
+        bad_tensor = [row[:] for row in c.J]
+        bad_tensor[0][1] = bad_tensor[1][0] = Fraction(0)
+        self.assertNotEqual(_omega_dot_torque_free(bad_tensor, c.OMEGA_0), c.OMEGA_DOT_0)
+
+    def test_v_eom_05_case_construction_avoids_the_known_trap(self):
+        """All-positive products would make "replace products by |value|" a no-op."""
+        c = self.C
+        products = (c.J[0][1], c.J[0][2], c.J[1][2])
+        absolute = [[abs(x) for x in row] for row in c.J]
+        self.assertFalse(all(x > 0 for x in products))
+        self.assertNotEqual(_omega_dot_torque_free(absolute, c.OMEGA_0), c.OMEGA_DOT_0,
+                            "the |.| mutation must be visible, so the products must not "
+                            "all share one sign")
+
+
+class TestVEOM05Discrimination(unittest.TestCase):
+    """What V-EOM-05 detects, with exact margins, and what it structurally cannot."""
+
+    C = VEOM05NonPrincipalBodyAxes
+
+    def _margin(self, tensor=None, omega=None):
+        c = self.C
+        tensor = c.J if tensor is None else tensor
+        omega = c.OMEGA_0 if omega is None else omega
+        wrong = _omega_dot_torque_free(tensor, omega)
+        return max(abs(x - y) for x, y in zip(wrong, c.OMEGA_DOT_0))
+
+    def _with_products(self, xy, xz, yz):
+        c = self.C
+        return [[c.J[0][0], xy, xz], [xy, c.J[1][1], yz], [xz, yz, c.J[2][2]]]
+
+    def test_v_eom_05_harness_reproduces_the_frozen_oracle(self):
+        self.assertEqual(self._margin(), 0)
+        self.assertEqual(_omega_dot_torque_free(self.C.J, self.C.OMEGA_1), self.C.OMEGA_DOT_1)
+
+    def test_v_eom_05_mutation_each_product_zeroed(self):
+        c = self.C
+        xy, xz, yz = c.J[0][1], c.J[0][2], c.J[1][2]
+        zero = Fraction(0)
+        self.assertEqual(self._margin(self._with_products(zero, xz, yz)), Fraction(157, 10))
+        self.assertEqual(self._margin(self._with_products(xy, zero, yz)), Fraction(4218, 203))
+        self.assertEqual(self._margin(self._with_products(xy, xz, zero)), Fraction(5841, 247))
+
+    def test_v_eom_05_mutation_each_product_sign_flipped(self):
+        c = self.C
+        xy, xz, yz = c.J[0][1], c.J[0][2], c.J[1][2]
+        self.assertEqual(self._margin(self._with_products(-xy, xz, yz)), Fraction(478, 17))
+        self.assertEqual(self._margin(self._with_products(xy, -xz, yz)), Fraction(44))
+        self.assertEqual(self._margin(self._with_products(xy, xz, -yz)), Fraction(486, 17))
+        self.assertEqual(self._margin(self._with_products(-xy, -xz, -yz)), Fraction(922, 17))
+        self.assertEqual(self._margin([[abs(x) for x in row] for row in c.J]),
+                         Fraction(922, 17))
+
+    def test_v_eom_05_mutation_products_swapped(self):
+        c = self.C
+        xy, xz, yz = c.J[0][1], c.J[0][2], c.J[1][2]
+        self.assertEqual(self._margin(self._with_products(yz, xz, xy)), Fraction(864, 17))
+        self.assertEqual(self._margin(self._with_products(xy, yz, xz)), Fraction(235, 56))
+
+    def test_v_eom_05_mutation_tensor_diagonalised(self):
+        self.assertEqual(self._margin(_diagonalised(self.C.J)), self.C.PRODUCTS_GAP_0)
+
+    def test_v_eom_05_mutation_inertia_axes_permuted(self):
+        c = self.C
+        permuted = [[c.J[p][q] for q in (1, 2, 0)] for p in (1, 2, 0)]
+        self.assertEqual(self._margin(permuted), Fraction(4386, 163))
+
+    def test_v_eom_05_mutation_equation_sign_errors(self):
+        """Three wrong equations that are numerically ONE mutation, recorded as such.
+
+        Dropping the minus sign, reversing the cross-product order, and writing
+        ``J wdot = +w x (J w)`` all produce ``+J^-1 [w x (J w)]`` -- the same wrong answer.
+        """
+        c = self.C
+        wrong = _scale(-1, c.OMEGA_DOT_0)
+        self.assertEqual(max(abs(x - y) for x, y in zip(wrong, c.OMEGA_DOT_0)), 46)
+        no_cross = (Fraction(0), Fraction(0), Fraction(0))
+        self.assertEqual(max(abs(x - y) for x, y in zip(no_cross, c.OMEGA_DOT_0)), 23)
+
+    def test_v_eom_05_mutation_inverse_omitted(self):
+        """``J`` applied where ``J^-1`` belongs."""
+        c = self.C
+        wrong = _matvec(c.J, c.RIGHT_HAND_SIDE_0)
+        self.assertEqual(max(abs(x - y) for x, y in zip(wrong, c.OMEGA_DOT_0)), 1834)
+
+    def test_v_eom_05_mutation_state_errors(self):
+        c = self.C
+        w = c.OMEGA_0
+        self.assertEqual(self._margin(omega=(w[1], w[2], w[0])), Fraction(7363, 163))
+        self.assertEqual(self._margin(omega=(-w[0], w[1], w[2])), Fraction(3392, 163))
+        self.assertEqual(self._margin(omega=(w[0], Fraction(0), w[2])), Fraction(1692, 163))
+        self.assertEqual(self._margin(omega=(w[0] + 1, w[1] - 1, w[2] + 2)),
+                         Fraction(2185, 163))
+
+    def test_v_eom_05_structural_blind_spots_are_recorded_not_claimed(self):
+        """Three mutations this anchor CANNOT see, each a property of the equation."""
+        c = self.C
+        transposed = [[c.J[k][i] for k in range(3)] for i in range(3)]
+        self.assertEqual(transposed, c.J, "J is symmetric, so transposing it is a no-op")
+        self.assertEqual(self._margin(transposed), 0)
+
+        negated = _scale(-1, c.OMEGA_0)
+        self.assertEqual(_omega_dot_torque_free(c.J, negated), c.OMEGA_DOT_0)
+
+        scaled = [[2 * x for x in row] for row in c.J]
+        self.assertEqual(_omega_dot_torque_free(scaled, c.OMEGA_0), c.OMEGA_DOT_0)
 
 
 if __name__ == "__main__":

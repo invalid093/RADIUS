@@ -41,8 +41,8 @@ this table said "verification tests written: none", which stopped being true at 
 | Implemented | `radius/frames.py` (frame, Euler, quaternion→DCM and wind-frame transformations) and `radius/math/quaternion.py` (Hamilton product) — and nothing else. No dynamics, integrator, atmosphere, aerodynamic or trajectory code exists |
 | Verified | **the frame and attitude conventions only** — V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01, against hand-derived anchors. Nothing else |
 | Validated | **nothing** |
-| Verification tests written | **94**: 94 passing, 0 failing, **0 skipped** — against 65+ test IDs *specified* across RS-001…RS-008 (not like-for-like: one specified ID is usually several test methods) |
-| Frozen analytical anchors, awaiting an implementation to consume them | **V-EOM-01**, **V-EOM-02**, **V-EOM-03** (translational) and **V-EOM-04** (rotational) — established as exact oracles; no translational or rotational dynamics code exists |
+| Verification tests written | **117**: 117 passing, 0 failing, **0 skipped** — against 65+ test IDs *specified* across RS-001…RS-008 (not like-for-like: one specified ID is usually several test methods) |
+| Frozen analytical anchors, awaiting an implementation to consume them | **V-EOM-01**, **V-EOM-02**, **V-EOM-03** (translational), **V-EOM-04** and **V-EOM-05** (rotational) — established as exact oracles; no translational or rotational dynamics code exists |
 | Independent reference data held | **none** |
 
 ### Translational EOM analytical anchors
@@ -288,6 +288,102 @@ is reserved for production code that exists and passes named tests. ADR-0010 als
 *under*-claims elsewhere — README, the handoff snapshot, the assumptions header, three specification
 headers — for a maturity-label decision by the researcher.
 
+### Products-of-inertia anchor — V-EOM-05
+
+**V-EOM-05 — torque-free rigid body whose body axes are *not* principal axes.** Frozen
+2026-09-12 in `tests/test_eom_anchors.py`, before any rotational dynamics implementation exists.
+
+`FINDING` (2026-09-11, recorded in `handoffs/current_state.md` §6) — **the previous configuration could
+not test its own claim.** RS-004 §7 specified the case with *principal moments $J_{xx}<J_{yy}<J_{zz}$,
+all distinct*, which is a **diagonal** tensor, while listing "products of inertia, full tensor
+handling" as what it isolates. The three products are then identically zero, so zeroing $J_{xy}$,
+$J_{xz}$ or $J_{yz}$, or diagonalising $\mathbf{J}$, left the case bit-identical. The defect was in
+the case, not the equation. **Resolved by this repair**, which changes the configuration and leaves
+the governing equation, every other anchor and the ADR-0010 conventions untouched.
+
+**What it verifies.** For $\mathbf{J}\dot{\boldsymbol\omega} + \boldsymbol\omega\times(\mathbf{J}\boldsymbol\omega) = 0$
+(RS-004 §4.1, ADR-0009), the **instantaneous** angular acceleration
+$\dot{\boldsymbol\omega} = -\mathbf{J}^{-1}[\boldsymbol\omega\times(\mathbf{J}\boldsymbol\omega)]$ at two
+frozen states, plus the invariant rates. An asymmetric torque-free body has **no elementary
+closed-form trajectory** — the solution runs on Jacobi elliptic functions — so no trajectory is frozen
+and none should be.
+
+**Coordinate convention.** The tensor is resolved in **body axes** $B$ (NOTATION §5.1), with
+$\mathbf{J} = [[J_{xx}, J_{xy}, J_{xz}], [J_{xy}, J_{yy}, J_{yz}], [J_{xz}, J_{yz}, J_{zz}]]$ and the
+products entering $\mathbf{J}\boldsymbol\omega$ with a **plus** sign; RADIUS does not use the
+leading-minus definition. This case says nothing about the $x_B$ symmetry-axis convention of
+ADR-0010: an axisymmetric vehicle is the special case in which the products vanish. Here they
+deliberately do not, which is what an asymmetric body — or a symmetric one whose structure is
+misaligned with the body frame — actually looks like.
+
+| Frozen case | |
+|---|---|
+| $\mathbf{J}$ (kg·m²) | $[[8, -1, -2],\ [-1, 7, -3],\ [-2, -3, 5]]$ |
+| Symmetric | yes, asserted entry by entry |
+| Positive definite | leading minors $(8,\ 55,\ 163)$, all $>0$ (Sylvester) |
+| Triangle inequalities | minors of $S=(\operatorname{tr}\mathbf{J}/2)\mathbf{I}-\mathbf{J}$ are $(2,\ 5,\ 7)$, all $>0$ |
+| Principal moments | $\approx(2.0205,\ 8.6111,\ 9.3684)$, condition number $\approx4.64$; eigenvectors nowhere near the body axes |
+| Products of inertia | $J_{xy}=-1$, $J_{xz}=-2$, $J_{yz}=-3$ — non-zero, distinct, and **not all of one sign** |
+| State 0 | $\boldsymbol\omega=(4,-6,7)$ → $\mathbf{J}\boldsymbol\omega=(24,-67,45)$ → RHS $(-199,12,124)$ → $\dot{\boldsymbol\omega}=(-18,9,23)$ |
+| State 1 | $\boldsymbol\omega=(7,-5,-8)$ → $\mathbf{J}\boldsymbol\omega=(77,-18,-39)$ → RHS $(-51,343,-259)$ → $\dot{\boldsymbol\omega}=(-12,31,-38)$ |
+| Invariants | state 0: $\lVert\mathbf{h}\rVert^{2}=7090$, $2T=813$; state 1: $7774$, $941$ |
+| Invariant rates | $\mathbf{h}\cdot(\mathbf{J}\dot{\boldsymbol\omega}) = 0$ and $\boldsymbol\omega\cdot(\mathbf{J}\dot{\boldsymbol\omega}) = 0$, exactly, at both states |
+
+Every frozen number is an integer although $\det\mathbf{J}=163$ is prime — itself a check, since
+almost any transcription slip makes $\dot{\boldsymbol\omega}$ fractional.
+
+**A tensor can be symmetric and positive definite and still not be a body.** The principal moments
+must also satisfy $J_i + J_j \ge J_k$, which holds exactly when $S$ above is positive semidefinite.
+$[[10,2,1],[2,8,3],[1,3,6]]$ is symmetric positive definite and **fails** that test; it is asserted as
+a counter-example so the check cannot quietly be dropped.
+
+**The oracle was calculated twice, by different routes** (`CALCULATION`, 2026-09-12), and the two
+agree exactly: (A) adjugate-over-determinant inverse with generic matrix helpers; (B) Cramer's rule
+with every determinant written out as an explicit scalar expression, sharing no helper with (A). Both
+are re-executed as tests. Substituting the frozen $\dot{\boldsymbol\omega}$ back into
+$\mathbf{J}\dot{\boldsymbol\omega}$ reproduces the right-hand side exactly, at both states.
+
+**How the products of inertia change the answer.** Deleting them — keeping the same diagonal —
+gives $\dot{\boldsymbol\omega} = (-21/2,\ -12,\ -24/5)$ at state 0 instead of $(-18, 9, 23)$, a
+max-norm difference of $139/5 = 27.8$ rad·s⁻²; at state 1, $(10, 24, -7)$ instead of $(-12, 31, -38)$,
+a difference of $31$ rad·s⁻². Each product matters individually: zeroing $J_{xy}$, $J_{xz}$, $J_{yz}$
+shifts $\dot{\boldsymbol\omega}$ by $157/10$, $4218/203$ and $5841/247$ rad·s⁻² respectively.
+
+*Case selection was driven by mutation analysis.* A candidate whose three products were all
+**positive** was rejected: "replace each product by its absolute value" is then the identity
+operation and escapes undetected. The chosen tensor has all three negative, so that mutation flips
+all three and is caught with a margin of $922/17$ rad·s⁻².
+
+**Mutation evidence** (2026-09-12; temporary copy, executed file verified per run, repository file
+never modified): **27 mutations, 27 detected, 0 escaped**; control clean. Tensor: each product zeroed
+(19/18/18 tests fail), each product sign-flipped (18/18/17), all products deleted (25), products
+replaced by $|\cdot|$ (19), a non-symmetric $\mathbf{J}$ (17), a tensor violating the triangle
+inequality (22). Equation: minus sign dropped (12), inverse omitted (12), cross term dropped from the
+residual (2), residual sign reversed (2), Cramer oracle sign error (2), diagonalisation helper made a
+no-op (3), triangle matrix using $\operatorname{tr}$ instead of $\operatorname{tr}/2$ (1), wrong
+leading-minor formula (2). Frozen values: each of $\dot{\boldsymbol\omega}_0$, $\dot{\boldsymbol\omega}_1$,
+$\mathbf{h}_0$, the right-hand side and the products gap (13/5/2/3/2). State: $\boldsymbol\omega_0$
+permuted (13), one component negated (13), one component zeroed (14), state 1 duplicated from state 0 (7).
+
+`LIMITATION` — **structural blind spots**, which are properties of the equation rather than of this
+case, and are asserted as facts so they are not mistaken for coverage:
+
+- **Transposing $\mathbf{J}$ is undetectable**, because $\mathbf{J}$ is symmetric: the mutation is the
+  identity operation. No case built on a symmetric tensor can catch it.
+- **$\boldsymbol\omega \to -\boldsymbol\omega$ leaves $\dot{\boldsymbol\omega}$ unchanged**, because the
+  right-hand side is quadratic in $\boldsymbol\omega$.
+- **$\mathbf{J} \to k\mathbf{J}$ leaves $\dot{\boldsymbol\omega}$ unchanged**, because $\mathbf{J}^{-1}$
+  and $\mathbf{J}$ cancel — the case cannot police the *scale* of an inertia tensor, only its shape.
+- Dropping the minus sign, reversing the cross-product order, and writing
+  $\mathbf{J}\dot{\boldsymbol\omega} = +\boldsymbol\omega\times(\mathbf{J}\boldsymbol\omega)$ are **one**
+  mutation numerically, not three. Counted once.
+- Being an instantaneous anchor, it cannot see errors that only appear after integration: time
+  stepping, attitude propagation, or any error preserving the derivative at these two states.
+
+**What V-EOM-05 does not establish:** a trajectory, an integrator, attitude propagation, variable
+mass, or a complete 6-DOF simulation. **No production rotational-dynamics implementation exists** for
+it to test; the anchor is frozen so that one can be written against it.
+
 ### Traceability — audit findings to their guarding anchors
 
 The two load-bearing corrections from the pre-implementation audit have named,
@@ -346,7 +442,8 @@ implementation. Specified in RS-004 §7; anchors:
   exact check on the variable-mass coupling, and derived independently of RADIUS's own derivation.
 - **V-ATT-02** — closed-form quaternion under constant body rate.
 
-**Conservation and symmetry checks** (V-EOM-05, V-NUM-08) deserve separate mention. An invariant is in
+**Conservation and symmetry checks** (V-EOM-05, V-NUM-08) deserve separate mention. V-EOM-05 is
+now frozen (§2) and carries exact invariants for V-NUM-08 to measure drift against. An invariant is in
 one respect a *stronger* test than a trajectory match: it must hold at every step, for every initial
 condition, without a reference solution existing at all.
 

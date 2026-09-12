@@ -237,7 +237,7 @@ terms so that a failure localises. Ordered so that each test's prerequisites are
 | V-EOM-03 | Constant non-zero body force at a fixed attitude | $\mathbf{F}^{B}\neq0$ constant, $g=0$, attitude a fixed parameter of the case, not a state | $\mathbf{a}^{I}=\frac{1}{m}\mathbf{T}_{IB}\mathbf{F}^{B}$; $\mathbf{v}(t)=\mathbf{v}_0+\mathbf{a}^{I}t$; $\mathbf{p}(t)=\mathbf{p}_0+\mathbf{v}_0t+\frac12\mathbf{a}^{I}t^2$ | the $\mathbf{T}_{IB}$ force path | **Verification anchor established** (frozen oracle, `tests/test_eom_anchors.py`); not yet implemented |
 | V-EOM-10 | Torque-free, constant rate about a principal axis — *listed as V-EOM-03 until 2026-09-11* | $\mathbf{M}=0$, $\boldsymbol{\omega}_0 \parallel$ principal axis | $\boldsymbol{\omega}$ constant; $q(t)$ closed form | quaternion kinematics, gyroscopic term vanishing correctly | **Planned** — never frozen |
 | V-EOM-04 | Torque-free axisymmetric coning | $J_\parallel \ne J_\perp$, $\boldsymbol{\omega}_0$ with non-zero transverse part. Frozen in two forms: RADIUS body axes (symmetry axis $x_B$) and the canonical frame $P$ (symmetry axis $z_P$), NOTATION §5.1 | the transverse $\boldsymbol{\omega}$ rotates relative to the body, about the positive symmetry axis, at $\lambda = \frac{J_\parallel - J_\perp}{J_\perp}\,\omega_\parallel$; $\omega_\parallel$ and $\lVert\boldsymbol{\omega}_\perp\rVert$ constant. In $B$: $\dot q = -\lambda r$, $\dot r = \lambda q$, $\omega_\parallel = p$ | the $\boldsymbol{\omega}\times\mathbf{J}\boldsymbol{\omega}$ term, quantitatively | **Verification anchor established** (frozen oracle, `tests/test_eom_anchors.py`); not yet implemented |
-| V-EOM-05 | Torque-free asymmetric | principal moments $J_{xx} < J_{yy} < J_{zz}$, all distinct | no closed form; **invariants** $\lVert\mathbf{h}\rVert$ and $T=\frac{1}{2}\boldsymbol{\omega}\!\cdot\!\mathbf{J}\boldsymbol{\omega}$ conserved. Qualitatively: intermediate-axis instability | products of inertia, full tensor handling | **Planned** |
+| V-EOM-05 | Torque-free, **body axes not principal axes** | $\mathbf{J}$ symmetric positive-definite in $B$ with **all three products of inertia non-zero**, and satisfying the triangle inequalities; $\mathbf{M}=0$; two frozen states | no closed-form trajectory (it runs on Jacobi elliptic functions); the **instantaneous** $\dot{\boldsymbol{\omega}} = -\mathbf{J}^{-1}[\boldsymbol{\omega}\times(\mathbf{J}\boldsymbol{\omega})]$ is exact and frozen, together with $\lVert\mathbf{h}\rVert^{2}$, $2T$ and their vanishing rates | **the products of inertia**, full-tensor handling, $\mathbf{J}^{-1}$ | **Verification anchor established** (frozen oracle, `tests/test_eom_anchors.py`); not yet implemented |
 | V-EOM-06 | **Tsiolkovsky** | straight line, no gravity, no aero, constant $\mathbf{c}$ and $\dot m$ | $\Delta v = \lVert\mathbf{c}\rVert \ln\!\big(m_0/m_f\big)$, exact | **the variable-mass coupling**, quantitatively | **Planned** |
 | V-EOM-07 | Thrust offset from CM | $\mathbf{M}_{\text{prop}} = \mathbf{r}\times\mathbf{F}_{\text{prop}}$ | angular acceleration $= \mathbf{J}^{-1}\mathbf{M}$ at $t=0$ | moment transfer, CM referencing | **Planned** |
 | **V-EOM-09** | **Variable-mass torque-free spin** | axisymmetric, uniform depletion, $\mathbf{M}=0$, $\boldsymbol{\omega}_0$ along the symmetry axis ($x_B$) | $\omega_\parallel$ — the roll rate $p$ — **constant** (hand-computed) | **the variable-mass rotational equation.** Added by the audit | **Planned** |
@@ -250,6 +250,17 @@ claim and a frozen anchor is never renumbered, so the planned case is now **V-EO
 content. Rows stay ordered by prerequisite, not by number. The V-EOM-04 entry was first written as
 $J_x = J_y = J_t \ne J_z$ with $\lambda = \frac{J_z - J_t}{J_t}\omega_z$ — symmetry about $z$ — and is
 restated above in the notation of ADR-0010; the frozen values did not change.
+
+**V-EOM-05 was repaired on 2026-09-12.** Until then this row configured the case as *principal
+moments $J_{xx} < J_{yy} < J_{zz}$, all distinct* — a **diagonal** tensor — while claiming that it
+isolates products of inertia and full-tensor handling. A diagonal tensor has no products of inertia,
+so an implementation that dropped $J_{xy}$, $J_{xz}$, $J_{yz}$, or diagonalised $\mathbf{J}$ before
+using it, reproduced the case exactly. The defect was in the **case**, not in the equation: §4.3
+already requires a full symmetric tensor "because the products of inertia are exactly what couple the
+axes". The repaired case, its independently derived oracle, and its mutation evidence are recorded in
+`docs/methodology/VERIFICATION_AND_VALIDATION.md` §2. The invariant-drift use of V-EOM-05 by V-NUM-08
+(RS-005 §9) is unaffected — the invariants are the same quantities, and they now carry exact frozen
+values.
 
 **V-EOM-09 exists because of a gate failure.** Every rotational test in the original suite ran at
 constant mass, so the variable-mass rotational equation was exercised by nothing at all — which is how

@@ -29,8 +29,8 @@ Independent of AURA (ADR-0002): no import, no shared schema, no dependency.
 | Researched | Frames, attitude, state, equations of motion, integration, atmosphere, aerodynamics, variable mass |
 | Designed | Software architecture; provenance; publication governance; conceptual AURA interface |
 | **Implemented** | **Foundations only.** Reference-frame, Euler, quaternion→DCM and wind-frame transformations (`radius/frames.py`); the Hamilton scalar-first quaternion product (`radius/math/quaternion.py`) |
-| **Verified** | **The frame and attitude conventions only** — V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01, against hand-derived anchors. **94 executed / 94 passed / 0 failed / 0 skipped** from the repository root. The specification itself was also audited (see below) |
-| **Verification anchors frozen** | **V-EOM-01 … V-EOM-04** — exact analytical oracles (force-free translation; constant gravity; constant body force at a fixed attitude; torque-free axisymmetric coning), frozen before the code they will test |
+| **Verified** | **The frame and attitude conventions only** — V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01, against hand-derived anchors. **117 executed / 117 passed / 0 failed / 0 skipped** from the repository root. The specification itself was also audited (see below) |
+| **Verification anchors frozen** | **V-EOM-01 … V-EOM-05** — exact analytical oracles (force-free translation; constant gravity; constant body force at a fixed attitude; torque-free axisymmetric coning; torque-free body whose body axes are not principal axes), frozen before the code they will test |
 | **Not implemented** | Translational dynamics; rotational dynamics; quaternion propagation; numerical integration; events; atmosphere; aerodynamics; propulsion and variable mass; complete 6-DOF propagation; uncertainty propagation |
 | **Validated** | **Nothing**, and no path to validation currently exists — no independent benchmark has been found |
 
@@ -144,9 +144,9 @@ Standard Atmosphere 1976 document directly.
 
 **Recorded during the anchor phases, still open:**
 
-12. **V-EOM-05 as specified cannot do what it claims.** Its configuration is three distinct
-    principal moments on the body axes, which has no products of inertia, yet the case is listed
-    as isolating products of inertia and full tensor handling.
+12. ~~**V-EOM-05 as specified cannot do what it claims.**~~ **Resolved 2026-09-12** (RL-0015): the
+    case is reconfigured with a symmetric positive-definite tensor whose three products of inertia
+    are non-zero, and is frozen as an anchor. See `VERIFICATION_AND_VALIDATION.md` §2.
 13. **V-EOM-10 overlaps V-ATT-02** in the closed-form $q(t)$. Recorded in ADR-0010, not resolved.
 14. **Rotational dynamics have one anchor only** (V-EOM-04). Attitude propagation, the inertial
     precession rate, and the variable-mass rotational case (V-EOM-09) are unanchored.

@@ -435,3 +435,49 @@ atmosphere, aerodynamic, propulsion or trajectory code exists.
 
 **NEXT STEP.** Await review. Begin the next scientific phase only after this documentation
 reconciliation is accepted; do not start V-EOM-05 unless explicitly authorised.
+
+---
+
+## 2026-09-12 · RL-0015 — V-EOM-05 repaired: a verification case that could not test its own claim
+
+**DECISION.** V-EOM-05 is reconfigured as *a torque-free rigid body whose body axes are not principal
+axes*: a symmetric positive-definite inertia tensor in $B$ with all three products of inertia
+non-zero, two frozen states, and an exact instantaneous $\dot{\boldsymbol\omega}$. The identifier, the
+governing equation, the ADR-0010 conventions and every other anchor are unchanged. No ADR was
+written: this is an anchor repair inside the existing conventions, not a new decision.
+
+**RATIONALE.** The case as specified used principal moments on the body axes — a diagonal tensor —
+while claiming to isolate products of inertia and full-tensor handling. A diagonal tensor has no
+products of inertia, so the three mutations the case existed to catch (zero $J_{xy}$, zero $J_{xz}$,
+zero $J_{yz}$) and the "diagonalise $\mathbf{J}$" shortcut all reproduced it exactly. A test that
+cannot fail under the error it targets is not testing for it. RS-004 §4.3 had the physics right all
+along — "the products of inertia are exactly what couple the axes" — so only the case needed changing.
+
+**EVIDENCE.** `CALCULATION`, 2026-09-12, exact rational arithmetic.
+
+- $\mathbf{J} = [[8,-1,-2],[-1,7,-3],[-2,-3,5]]$: leading minors $(8,55,163)$ give positive
+  definiteness; minors $(2,5,7)$ of $(\operatorname{tr}\mathbf{J}/2)\mathbf{I}-\mathbf{J}$ give the
+  strict triangle inequalities. Both are necessary: $[[10,2,1],[2,8,3],[1,3,6]]$ is positive definite
+  and is **not** a physically realisable body, and it is frozen as a counter-example.
+- $\boldsymbol\omega=(4,-6,7) \Rightarrow \dot{\boldsymbol\omega}=(-18,9,23)$;
+  $\boldsymbol\omega=(7,-5,-8) \Rightarrow \dot{\boldsymbol\omega}=(-12,31,-38)$. Computed twice by
+  independent routes — adjugate inverse, and Cramer's rule written out as scalar expressions — which
+  agree exactly, and both re-executed as tests.
+- Deleting the products changes $\dot{\boldsymbol\omega}$ by $139/5$ and $31$ rad·s⁻² at the two
+  states, which is the discrimination the previous configuration lacked entirely.
+- Mutation harness: **27 mutations, 27 detected, 0 escaped**, control clean.
+- A candidate tensor with all-positive products was **rejected**: it makes "replace each product by
+  its absolute value" an identity operation.
+
+**IMPACT.** 23 tests added (94 → 117 executed, 117 passed, 0 skipped). `tests/test_eom_anchors.py`
+gains a V-EOM-05 section; RS-004 §7 gains the repaired row and a note recording what was wrong;
+the V&V document gains the anchor's derivation, mutation table and blind spots. V-EOM-01 … V-EOM-04
+are byte-identical apart from two lines of module docstring. No production code, no dependency, no
+identifier and no existing oracle changed. Q8 remains open.
+
+**Structural blind spots recorded, not claimed away:** transposing a symmetric $\mathbf{J}$ is a
+no-op; $\boldsymbol\omega\to-\boldsymbol\omega$ leaves $\dot{\boldsymbol\omega}$ unchanged because the
+right-hand side is quadratic; $\mathbf{J}\to k\mathbf{J}$ leaves it unchanged because the inverse
+cancels the tensor, so the case constrains the *shape* of an inertia tensor and not its scale.
+
+**NEXT STEP.** Stop and await review before beginning production rotational dynamics.
