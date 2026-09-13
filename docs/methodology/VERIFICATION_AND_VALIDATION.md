@@ -38,10 +38,10 @@ this table said "verification tests written: none", which stopped being true at 
 
 | | |
 |---|---|
-| Implemented | `radius/frames.py` (frame, Euler, quaternion→DCM and wind-frame transformations) and `radius/math/quaternion.py` (Hamilton product) — and nothing else. No dynamics, integrator, atmosphere, aerodynamic or trajectory code exists |
-| Verified | **the frame and attitude conventions only** — V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01, against hand-derived anchors. Nothing else |
+| Implemented | `radius/frames.py` (frame, Euler, quaternion→DCM and wind-frame transformations), `radius/math/quaternion.py` (Hamilton product), and `radius/dynamics/rotational.py` (the rigid-body rotational **derivative**, evaluated at one state) — and nothing else. No integrator, attitude propagation, translational dynamics, atmosphere, aerodynamic or trajectory code exists |
+| Verified | **the frame and attitude conventions** (V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01) **and the rotational derivative** (V-EOM-05, via `tests/test_dynamics_rotational.py`), against hand-derived anchors. Nothing else |
 | Validated | **nothing** |
-| Verification tests written | **117**: 117 passing, 0 failing, **0 skipped** — against 65+ test IDs *specified* across RS-001…RS-008 (not like-for-like: one specified ID is usually several test methods) |
+| Verification tests written | **135**: 135 passing, 0 failing, **0 skipped** — against 65+ test IDs *specified* across RS-001…RS-008 (not like-for-like: one specified ID is usually several test methods) |
 | Frozen analytical anchors, awaiting an implementation to consume them | **V-EOM-01**, **V-EOM-02**, **V-EOM-03** (translational), **V-EOM-04** and **V-EOM-05** (rotational) — established as exact oracles; no translational or rotational dynamics code exists |
 | Independent reference data held | **none** |
 
@@ -383,6 +383,35 @@ case, and are asserted as facts so they are not mistaken for coverage:
 **What V-EOM-05 does not establish:** a trajectory, an integrator, attitude propagation, variable
 mass, or a complete 6-DOF simulation. **No production rotational-dynamics implementation exists** for
 it to test; the anchor is frozen so that one can be written against it.
+
+**Production status (2026-09-12).** V-EOM-05 is the first anchor with an implementation to
+consume it. `radius/dynamics/rotational.py` evaluates
+$\dot{\boldsymbol\omega} = \mathbf{J}^{-1}[\mathbf{M}_{\text{ext}} - \boldsymbol\omega\times(\mathbf{J}\boldsymbol\omega)]$
+at one state — a derivative, not a step — and `tests/test_dynamics_rotational.py` **consumes**
+the frozen values above rather than recomputing them, so an algorithmic error shared between
+oracle and implementation cannot hide. Both frozen states reproduce, and the diagonalised
+comparisons reproduce, which is what demonstrates the production code actually reads the
+products of inertia.
+
+| | |
+|---|---|
+| Tolerance | **1e-12 absolute**, derived rather than inherited: one 3x3 binary64 solve, $\lvert\dot{\boldsymbol\omega}\rvert \le 40$, $\operatorname{cond}(\mathbf{J}) \approx 4.64$, so a backward-stable solve gives $\lesssim 4\times10^{-14}$. It sits 13 orders below the smallest V-EOM-05 discrimination margin (15.7 rad·s⁻²) |
+| Measured error | worst $3.55\times10^{-15}$ rad·s⁻² across both torque-free states and the moment case; exactly zero for two of the three |
+| Independent cross-check | production versus the anchor's own exact-rational oracle: agreement to $3.55\times10^{-15}$; the oracle's two internal routes (adjugate, Cramer) agree exactly |
+| Moment path | verified separately with $\mathbf{M} = (11,-18,14)$ N·m giving $\dot{\boldsymbol\omega} = (-16,8,26)$ rad·s⁻², derived independently in exact arithmetic; the torque-free case alone cannot exercise it |
+| Mutation evidence | 16 required mutations of the production function, **16 detected, 0 escaped** (gyroscopic term removed, cross order reversed, gyroscopic sign, moment omitted/added, solve sign, each product zeroed, diagonalised, identity tensor, axes permuted, $\boldsymbol\omega$ permuted/negated, solve replaced by elementwise division, diagonal-only solve) |
+| Blind spots | transposing a symmetric $\mathbf{J}$, and using an explicit inverse instead of a solve — both mathematical identities under this representation, not defects |
+
+`LIMITATION`: the production function does **not** validate symmetry, positive definiteness or
+the triangle inequalities. Those are physical properties of the mass model (`A-EOM-02`,
+V-VM-06 of RS-008), RADIUS has no production validation policy for them yet, and inventing one
+inside a derivative evaluation was rejected. It validates only what the mathematics requires:
+shapes, finiteness, and a non-singular tensor. A non-symmetric tensor is therefore accepted and
+used as given — pinned by a test, so the behaviour is visible rather than assumed.
+
+**This is not "rotational dynamics implemented".** Attitude propagation, numerical integration,
+translational dynamics, the assembled state derivative, variable mass, atmosphere, aerodynamics
+and propulsion remain unimplemented, and the project maturity label is unchanged (ADR-0011).
 
 ### Traceability — audit findings to their guarding anchors
 

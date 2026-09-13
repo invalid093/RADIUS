@@ -9,7 +9,9 @@ framework.*
 specified with verification anchors, not yet implemented. Reference-frame transformations and
 quaternion algebra exist in `radius/` and are verified against hand-derived anchors. The
 simulator itself does not: its equations are specified and carry frozen analytical anchors, but
-no dynamics, integrator, atmosphere or aerodynamic code has been written. Nothing is validated.
+one dynamics function exists — the rigid-body rotational derivative, verified against its
+anchor — and no integrator, attitude propagation, translational dynamics, atmosphere or
+aerodynamic code has been written. Nothing is validated.
 The project is actively developed. See [Current status](#current-status).
 
 ---
@@ -94,9 +96,9 @@ with verification anchors, not yet implemented (`docs/methodology/PUBLICATION_PO
 |---|---|
 | Researched | frames, attitude, state, equations of motion, numerical integration, atmosphere, aerodynamics, variable mass — `docs/research/` |
 | Designed | software architecture, provenance, publication governance, conceptual AURA interface |
-| Implemented | **foundations only** — reference-frame, Euler, quaternion→DCM and wind-frame transformations (`radius/frames.py`) and the Hamilton quaternion product (`radius/math/quaternion.py`), each exercised by named tests. No dynamics, integrator, atmosphere, aerodynamic, propulsion or trajectory code exists |
-| Verified | **the frame and attitude conventions only** — V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01, against hand-derived anchors. 94 tests run, 94 pass, 0 skipped |
-| Verification anchors frozen | **V-EOM-01 … V-EOM-04** — exact analytical oracles for the translational and rotational equations of motion, frozen *before* the code they will test (`tests/test_eom_anchors.py`) |
+| Implemented | **foundations, plus one dynamics function** — reference-frame, Euler, quaternion→DCM and wind-frame transformations (`radius/frames.py`), the Hamilton quaternion product (`radius/math/quaternion.py`), and the rigid-body rotational **derivative** (`radius/dynamics/rotational.py`), each exercised by named tests. No integrator, attitude propagation, translational dynamics, atmosphere, aerodynamic, propulsion or trajectory code exists |
+| Verified | **the frame and attitude conventions** — V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01 — **and the rotational derivative** against V-EOM-05, all versus hand-derived anchors. 135 tests run, 135 pass, 0 skipped |
+| Verification anchors frozen | **V-EOM-01 … V-EOM-05** — exact analytical oracles for the translational and rotational equations of motion, frozen *before* the code they test (`tests/test_eom_anchors.py`). V-EOM-05 is now consumed by the rotational derivative |
 | Validated | **nothing**, and no path to validation currently exists |
 
 The specification passes its own [quality gate](docs/research/QUALITY_GATE.md) for Phases 2–6

@@ -3,10 +3,13 @@
 A physics-based nonlinear 6-DOF aerospace vehicle dynamics, simulation and
 uncertainty-analysis framework.
 
-**Status: research / architecture phase.** This package currently contains only the
-frame and quaternion mathematics needed to make the independently hand-derived Phase 2A
-anchors in ``tests/test_frames.py`` executable. There is no dynamics engine, no
-integrator, no atmosphere, no aerodynamics, no simulation and no vehicle model.
+**Status: research / architecture phase.** This package contains the frame and quaternion
+mathematics needed to make the independently hand-derived Phase 2A anchors in
+``tests/test_frames.py`` executable, plus exactly one dynamics function: the rigid-body
+rotational derivative in ``radius.dynamics.rotational``, verified against the V-EOM-05
+anchor. That is a derivative evaluated at one state, not a dynamics engine: there is no
+integrator, no attitude propagation, no translational dynamics, no atmosphere, no
+aerodynamics, no simulation and no vehicle model.
 
 Nothing here is validated. The anchors that this code is written against are
 *verification* evidence only: they establish that the documented conventions have been

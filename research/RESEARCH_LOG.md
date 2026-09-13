@@ -481,3 +481,67 @@ right-hand side is quadratic; $\mathbf{J}\to k\mathbf{J}$ leaves it unchanged be
 cancels the tensor, so the case constrains the *shape* of an inertia tensor and not its scale.
 
 **NEXT STEP.** Stop and await review before beginning production rotational dynamics.
+
+---
+
+## 2026-09-12 · RL-0016 — First production dynamics: the rigid-body rotational derivative
+
+**DECISION.** The rotational derivative of RS-004 §4.1 is implemented as a single pure function,
+
+$$\dot{\boldsymbol\omega} = \mathbf{J}^{-1}\big[\mathbf{M}_{\text{ext}} - \boldsymbol\omega\times(\mathbf{J}\boldsymbol\omega)\big]$$
+
+in `radius/dynamics/rotational.py` as
+`angular_acceleration_wrt_i_in_b(inertia_about_cm_in_b, omega_wrt_i_in_b, moment_about_cm_in_b)`,
+returning rad·s⁻² in body axes. `radius/dynamics/` is the location ARCHITECTURE §3 already
+assigns to the equations of motion. The full symmetric tensor is used, with products of inertia
+stored **positive** (ADR-0010); the axisymmetric special case is not hard-coded. The linear
+system is **solved**, not inverted — $\mathbf{J}^{-1}$ is never formed. No new dependency: numpy
+was already approved (ARCHITECTURE §8).
+
+**ACCEPTANCE GATE.** V-EOM-05, frozen in Phase 2K *before* this code existed.
+`tests/test_dynamics_rotational.py` imports the frozen values and compares; it does not
+recompute them, so an algorithmic error shared between oracle and implementation cannot hide.
+Both states reproduce: $(4,-6,7) \to (-18,9,23)$ and $(7,-5,-8) \to (-12,31,-38)$. The
+diagonalised comparisons reproduce too, which is what shows the products of inertia are actually
+being consumed. The moment path has its own independently derived oracle —
+$\mathbf{M} = (11,-18,14) \Rightarrow \dot{\boldsymbol\omega} = (-16,8,26)$ — because a
+torque-free case alone cannot detect a function that ignores its moment argument.
+
+**TESTS.** 117 → **135 executed / 135 passed / 0 failed / 0 skipped**; 18 added. V-EOM-01 …
+V-EOM-05 are untouched: `tests/test_eom_anchors.py` has no diff at all.
+
+**TOLERANCE.** 1e-12 absolute, derived rather than inherited. Phase 2H recorded that the
+translational 1e-12 does not transfer; here there is no integration, so the bound comes from
+conditioning: $\lvert\dot{\boldsymbol\omega}\rvert \le 40$, $\operatorname{cond}(\mathbf{J})\approx 4.64$,
+unit round-off $2.22\times10^{-16}$, hence $\lesssim 4\times10^{-14}$ for a backward-stable solve.
+Measured worst error **$3.55\times10^{-15}$**, exactly zero in two of three cases. The tolerance is
+set from the bound, not the measurement, and sits 13 orders below the anchor's smallest
+discrimination margin.
+
+**MUTATION RESULTS.** 16 required mutations of the production function, **16 detected, 0
+escaped**: gyroscopic term removed; cross-product order reversed; gyroscopic sign reversed;
+moment omitted; moment added instead of subtracted; solve sign reversed; each of $J_{xy}$,
+$J_{xz}$, $J_{yz}$ zeroed; tensor diagonalised; tensor replaced by the identity; tensor axes
+permuted; $\boldsymbol\omega$ permuted; $\omega_x$ negated; solve replaced by elementwise
+division; diagonal-only solve. Two mutations escaped **by mathematical identity, not by weakness**
+— transposing a symmetric $\mathbf{J}$ (the Phase 2K blind spot) and using an explicit inverse
+instead of a solve.
+
+**INDEPENDENT CROSS-CHECK.** Production versus the anchor's exact-rational oracle: agreement to
+$3.55\times10^{-15}$. No production code was copied into the oracle, and no oracle algorithm into
+production.
+
+**LIMITATIONS.** The function validates shapes, finiteness and non-singularity — what the solve
+mathematically requires — and deliberately does **not** validate symmetry, positive definiteness
+or the triangle inequalities. Those are properties of the mass model (`A-EOM-02`, V-VM-06 of
+RS-008) and RADIUS has no production validation policy for them; inventing one inside a
+derivative evaluation was rejected as out of scope, and the behaviour that results is pinned by a
+test rather than left to assumption.
+
+**NOT IMPLEMENTED, EXPLICITLY.** No integration, no attitude or quaternion propagation, no state
+propagation, no translational dynamics, no assembled state derivative, no 6-DOF loop, no events,
+no atmosphere, no aerodynamics, no propulsion, no variable mass, no uncertainty propagation. One
+derivative at one state is not a dynamics engine, and the project maturity label is unchanged
+(ADR-0011).
+
+**NEXT STEP.** Stop and await review before implementing attitude propagation or an integrator.

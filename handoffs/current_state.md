@@ -28,10 +28,10 @@ Independent of AURA (ADR-0002): no import, no shared schema, no dependency.
 |---|---|
 | Researched | Frames, attitude, state, equations of motion, integration, atmosphere, aerodynamics, variable mass |
 | Designed | Software architecture; provenance; publication governance; conceptual AURA interface |
-| **Implemented** | **Foundations only.** Reference-frame, Euler, quaternion→DCM and wind-frame transformations (`radius/frames.py`); the Hamilton scalar-first quaternion product (`radius/math/quaternion.py`) |
-| **Verified** | **The frame and attitude conventions only** — V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01, against hand-derived anchors. **117 executed / 117 passed / 0 failed / 0 skipped** from the repository root. The specification itself was also audited (see below) |
+| **Implemented** | **Foundations, plus one dynamics function.** Reference-frame, Euler, quaternion→DCM and wind-frame transformations (`radius/frames.py`); the Hamilton scalar-first quaternion product (`radius/math/quaternion.py`); the rigid-body rotational **derivative** $\dot{\boldsymbol\omega} = \mathbf{J}^{-1}[\mathbf{M}-\boldsymbol\omega\times(\mathbf{J}\boldsymbol\omega)]$ evaluated at one state (`radius/dynamics/rotational.py`) |
+| **Verified** | **The frame and attitude conventions** — V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01 — **and the rotational derivative** against V-EOM-05, all versus hand-derived anchors. **135 executed / 135 passed / 0 failed / 0 skipped** from the repository root. The specification itself was also audited (see below) |
 | **Verification anchors frozen** | **V-EOM-01 … V-EOM-05** — exact analytical oracles (force-free translation; constant gravity; constant body force at a fixed attitude; torque-free axisymmetric coning; torque-free body whose body axes are not principal axes), frozen before the code they will test |
-| **Not implemented** | Translational dynamics; rotational dynamics; quaternion propagation; numerical integration; events; atmosphere; aerodynamics; propulsion and variable mass; complete 6-DOF propagation; uncertainty propagation |
+| **Not implemented** | Translational dynamics; rotational **propagation** (the derivative exists; nothing integrates it); quaternion propagation; numerical integration; events; atmosphere; aerodynamics; propulsion and variable mass; complete 6-DOF propagation; uncertainty propagation |
 | **Validated** | **Nothing**, and no path to validation currently exists — no independent benchmark has been found |
 
 ---
@@ -78,6 +78,11 @@ tests were written **before** the modules they test, and each module was mutatio
 - **Specification reconciliation (ADR-0010)** — the V-EOM-03 identifier collision, the symmetry-axis
   convention ($x_B$) and the inaccurate "Implemented" wording in RS-004 §4.3.
 - **Maturity reconciliation (ADR-0011)** — this file, the README and the stale status headers.
+- **V-EOM-05 repaired (RL-0015)** — the products-of-inertia anchor was reconfigured with a
+  non-principal-axis inertia tensor, because its previous diagonal configuration could not
+  detect the errors it existed to catch.
+- **First production dynamics function (RL-0016)** — the rigid-body rotational derivative,
+  `radius/dynamics/rotational.py`, verified against V-EOM-05 and mutation-tested.
 
 ---
 
@@ -155,8 +160,9 @@ Standard Atmosphere 1976 document directly.
 
 ## 7. Next action
 
-**Await review of the documentation reconciliation (ADR-0010, ADR-0011).** Begin the next
-scientific phase only once it is accepted, and do not start V-EOM-05 unless explicitly authorised.
+**Await review of the first production dynamics function** (`radius/dynamics/rotational.py`,
+RL-0016). Do not begin attitude propagation, an integrator, or translational dynamics until
+that review is accepted.
 
 The remaining order is unchanged: RS-003 state module, RS-004 dynamics against the frozen
 V-EOM-01 … V-EOM-04 anchors, RS-005 integrator, then the remaining analytical cases of RS-004 §7.
