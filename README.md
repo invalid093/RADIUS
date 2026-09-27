@@ -1,6 +1,6 @@
 # RADIUS
 
-**Rocket Dynamics & Integrated Uncertainty Simulation**
+**Robust Aerospace Dynamics & Uncertainty Inference System**
 
 *A physics-based nonlinear 6-DOF aerospace vehicle dynamics, simulation, and uncertainty-analysis
 framework.*
