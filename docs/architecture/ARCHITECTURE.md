@@ -1,9 +1,11 @@
 # RADIUS — Software Architecture
 
-**Status:** Design. **Partially implemented:** `radius/frames.py`, `radius/math/quaternion.py`
-and `radius/dynamics/rotational.py` (the rotational derivative only) exist and follow the
-module rules below. The simulation pipeline — the assembled state derivative, integrator,
-environment, events, recording — is not implemented.
+**Status:** Design, and **terminal** — the project is closed (ADR-0012, 2026-10-01), so the
+pipeline described below was never built. **Partially implemented:** `radius/frames.py`,
+`radius/math/quaternion.py` and `radius/dynamics/rotational.py` (the rotational derivative only)
+exist and follow the module rules below. The simulation pipeline — the assembled state derivative,
+integrator, environment, events, recording — is not implemented and will not be. This document is
+retained as the design record it is; see `CLOSURE.md` §6.
 **Depends on:** RS-001 … RS-008
 
 ---

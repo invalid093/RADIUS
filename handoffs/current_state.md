@@ -1,9 +1,15 @@
-# RADIUS — Current State
+# RADIUS — Final State
 
-**Date:** 2026-09-12 · **Commit:** see `git log -1` · **Branch:** `main`
-**Maturity:** **Research / Architecture** — foundations implemented and verified; 6-DOF dynamics
-specified with verification anchors, not yet implemented (PUBLICATION_POLICY §11, ADR-0011)
-**Phase:** 2 of 14 — foundations and analytical anchors
+**Date:** 2026-10-01 · **Commit:** see `git log -1` · **Branch:** `main`
+**Lifecycle:** **CLOSED** (ADR-0012). Not under development; no further phases are planned
+**Maturity at closure:** **Research / Architecture** — foundations implemented and verified; 6-DOF
+dynamics specified with verification anchors, not yet implemented (PUBLICATION_POLICY §11, ADR-0011).
+Unchanged by closure: the label describes what the code does, and stopping work promotes nothing
+**Phase reached:** 2 of 14 — foundations and analytical anchors
+
+**This file was a continuation snapshot and is now a terminal one.** The authoritative account of
+final state, the findings and the reasons for closure is [`../CLOSURE.md`](../CLOSURE.md); this file
+remains as the detailed status inventory it always was.
 
 Concise, factual, self-contained. Per `docs/methodology/PUBLICATION_POLICY.md` §7 this file contains
 no conversation history, no reasoning traces, no logs.
@@ -32,7 +38,7 @@ Independent of AURA (ADR-0002): no import, no shared schema, no dependency.
 | **Verified** | **The frame and attitude conventions** — V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01 — **and the rotational derivative** against V-EOM-05, all versus hand-derived anchors. **135 executed / 135 passed / 0 failed / 0 skipped** from the repository root. The specification itself was also audited (see below) |
 | **Verification anchors frozen** | **V-EOM-01 … V-EOM-05** — exact analytical oracles (force-free translation; constant gravity; constant body force at a fixed attitude; torque-free axisymmetric coning; torque-free body whose body axes are not principal axes), frozen before the code they will test |
 | **Not implemented** | Translational dynamics; rotational **propagation** (the derivative exists; nothing integrates it); quaternion propagation; numerical integration; events; atmosphere; aerodynamics; propulsion and variable mass; complete 6-DOF propagation; uncertainty propagation |
-| **Validated** | **Nothing**, and no path to validation currently exists — no independent benchmark has been found |
+| **Validated** | **Nothing**, and no path to validation ever existed — no independent benchmark was found, and the scope boundary excludes the sources one would come from (`CLOSURE.md` §5) |
 
 ---
 
@@ -100,6 +106,7 @@ tests were written **before** the modules they test, and each module was mutatio
 | Publication | Deny-by-default; curated record only | 0008 |
 | Dynamics conventions | One ID per verification claim; symmetry axis is $x_B$; $J_\parallel$/$J_\perp$ notation; canonical frame $P$ for analysis only; component status vocabulary | **0010** |
 | Maturity labelling | Project label is scoped and is not the component status; promotion criteria fixed in advance | **0011** |
+| **Closure** | **Development stops; the repository becomes a terminal record; the maturity label is unchanged; no licence is added** | **0012** |
 
 ---
 
@@ -160,16 +167,20 @@ Standard Atmosphere 1976 document directly.
 
 ## 7. Next action
 
-**Await review of the first production dynamics function** (`radius/dynamics/rotational.py`,
-RL-0016). Do not begin attitude propagation, an integrator, or translational dynamics until
-that review is accepted.
+**None. The project is closed** (ADR-0012, 2026-10-01). The review of the first production dynamics
+function (`radius/dynamics/rotational.py`, RL-0016) concluded with the decision to stop rather than
+to continue.
 
-The remaining order is unchanged: RS-003 state module, RS-004 dynamics against the frozen
-V-EOM-01 … V-EOM-04 anchors, RS-005 integrator, then the remaining analytical cases of RS-004 §7.
-Do not skip to aerodynamics — the gate does not pass (Q8, `A-AER-03`).
+Not begun, and not planned: the RS-003 state module, translational dynamics against the frozen
+V-EOM-01 … V-EOM-04 anchors, the RS-005 integrator, attitude propagation, the remaining analytical
+cases of RS-004 §7, atmosphere, aerodynamics, variable mass, uncertainty propagation. The four
+unconsumed anchors remain frozen and correct; they are simply not exercised here.
 
-In parallel, and not blocking: search for a published generic aerodynamic coefficient set, and for an
-independent 6-DOF benchmark trajectory.
+The open questions in §6 are permanent recorded gaps, not a work queue. Q8 stays open — it is not
+closed by abandonment.
+
+Reasons for closure, and the conditions under which reopening would be sound, are in
+[`../CLOSURE.md`](../CLOSURE.md) §§4.4 and 8.
 
 ---
 
@@ -182,4 +193,5 @@ suite runs from the repository root:
 python -m unittest discover -s tests -t tests
 ```
 
-There is no simulation to run yet.
+135 executed / 135 passed / 0 skipped at closure. There is no simulation to run, and none was ever
+produced.

@@ -5,14 +5,29 @@
 *A physics-based nonlinear 6-DOF aerospace vehicle dynamics, simulation, and uncertainty-analysis
 framework.*
 
-**Status: Research / Architecture** — foundations implemented and verified; 6-DOF dynamics
-specified with verification anchors, not yet implemented. Reference-frame transformations and
-quaternion algebra exist in `radius/` and are verified against hand-derived anchors. The
+> ### CLOSED — 2026-10-01
+>
+> **RADIUS is not under development.** It is published as a terminal record of what was built and
+> verified, what was deliberately not built, and why the work stopped. **There is no simulator
+> here, and nothing is validated.**
+>
+> **Read [`CLOSURE.md`](CLOSURE.md) first** — final inventory, the findings, and the reasons for
+> closure. Decision: [ADR-0012](docs/decisions/ADR-0012-project-closure.md). Where anything below
+> implies that work continues, `CLOSURE.md` governs.
+
+**Maturity at closure: Research / Architecture** — foundations implemented and verified; 6-DOF
+dynamics specified with verification anchors, not yet implemented. Reference-frame transformations
+and quaternion algebra exist in `radius/` and are verified against hand-derived anchors. The
 simulator itself does not: its equations are specified and carry frozen analytical anchors, but
 one dynamics function exists — the rigid-body rotational derivative, verified against its
 anchor — and no integrator, attitude propagation, translational dynamics, atmosphere or
-aerodynamic code has been written. Nothing is validated.
-The project is actively developed. See [Current status](#current-status).
+aerodynamic code has been written. Nothing is validated. The label is unchanged by closure: it is
+a claim about what the code does, and stopping work promotes nothing (ADR-0011 §4, ADR-0012 §3).
+
+**What this repository is worth reading for** is the verification method and the defects it caught:
+four specification errors found *before any code existed* — including one that no test could have
+caught — five defects found in the project's own verification apparatus, and five methodological
+results. All in [`CLOSURE.md`](CLOSURE.md) §4. See [Final status](#final-status).
 
 ---
 
@@ -87,10 +102,11 @@ independently meaningful. RADIUS will expose plain, self-describing outputs (sta
 configuration, seeds, provenance metadata); whether anything consumes them is not RADIUS's concern.
 See `docs/architecture/AURA_INTERFACE.md`.
 
-## Current status
+## Final status
 
-**Research / Architecture** — foundations implemented and verified; 6-DOF dynamics specified
-with verification anchors, not yet implemented (`docs/methodology/PUBLICATION_POLICY.md` §11).
+**CLOSED 2026-10-01** at maturity **Research / Architecture** — foundations implemented and
+verified; 6-DOF dynamics specified with verification anchors, not yet implemented
+(`docs/methodology/PUBLICATION_POLICY.md` §11). Full account: [`CLOSURE.md`](CLOSURE.md).
 
 | | |
 |---|---|
@@ -99,16 +115,17 @@ with verification anchors, not yet implemented (`docs/methodology/PUBLICATION_PO
 | Implemented | **foundations, plus one dynamics function** — reference-frame, Euler, quaternion→DCM and wind-frame transformations (`radius/frames.py`), the Hamilton quaternion product (`radius/math/quaternion.py`), and the rigid-body rotational **derivative** (`radius/dynamics/rotational.py`), each exercised by named tests. No integrator, attitude propagation, translational dynamics, atmosphere, aerodynamic, propulsion or trajectory code exists |
 | Verified | **the frame and attitude conventions** — V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01 — **and the rotational derivative** against V-EOM-05, all versus hand-derived anchors. 135 tests run, 135 pass, 0 skipped |
 | Verification anchors frozen | **V-EOM-01 … V-EOM-05** — exact analytical oracles for the translational and rotational equations of motion, frozen *before* the code they test (`tests/test_eom_anchors.py`). V-EOM-05 is now consumed by the rotational derivative |
-| Validated | **nothing**, and no path to validation currently exists |
+| Validated | **nothing**, and no path to validation ever existed — no independent 6-DOF benchmark trajectory was found, and the scope boundary excludes the sources one would come from (`CLOSURE.md` §5) |
+| Not built | no integrator, attitude propagation, translational dynamics, assembled state derivative, events, atmosphere, aerodynamics, propulsion, variable mass, trajectory, uncertainty propagation, navigation, guidance or control. Reached **step 2 of the 14-step order** below |
 
 The specification passes its own [quality gate](docs/research/QUALITY_GATE.md) for Phases 2–6
 (frames through analytical verification) and **does not pass** for Phase 8 (aerodynamics): there is no
 traceable source for a coefficient set, so implementing it would produce results scoped to a
-hypothetical vehicle. That gap is recorded rather than worked around.
+hypothetical vehicle. That gap is recorded rather than worked around, and the phase was never begun.
 
 Explicitly:
 
-- There is no simulator yet. There are no results. There are no figures.
+- There is no simulator. There are no results. There are no figures. None were ever produced.
 - Nothing here is validated. *Verification* ("did we implement the equations correctly?") and
   *validation* ("does the model represent reality well enough for the intended purpose?") are
   reported as distinct claims, and passing unit tests are never described as validation.
@@ -120,6 +137,7 @@ Explicitly:
 ```
 RADIUS/
 ├── README.md            this file
+├── CLOSURE.md           terminal record: final state, findings, reasons for closure
 ├── CLAUDE.md            operating rules for the project
 ├── docs/
 │   ├── PROVENANCE.md    the chain every published number must be traceable along
@@ -128,7 +146,8 @@ RADIUS/
 │   ├── architecture/    software architecture; conceptual AURA interface
 │   ├── methodology/     notation and conventions; V&V strategy; publication policy
 │   └── decisions/       ADRs — decisions with rationale, alternatives, and revisit criteria
-├── radius/              implemented source: `frames.py`, `math/quaternion.py`
+├── radius/              implemented source: `frames.py`, `math/quaternion.py`,
+│                        `dynamics/rotational.py`
 ├── tests/               verification tests, including the frozen analytical anchors
 ├── infrastructure/
 │   └── publication_checklist.md   pre-push audit
@@ -136,16 +155,16 @@ RADIUS/
 │   ├── SOURCES.md       reference record: what each source is used for
 │   └── RESEARCH_LOG.md  dated decision log
 └── handoffs/
-    └── current_state.md concise project state for continuation
+    └── current_state.md final status inventory
 ```
 
 **Start here:** [`docs/research/README.md`](docs/research/README.md) — the mathematical specification
 and its quality-gate verdict.
 
-`radius/`, `tests/` and `handoffs/` exist because the phases that fill them have run.
-`experiments/`, `validation/` and `results/` are **not created yet**: a directory arrives with the
-phase that fills it, so the tree describes what exists rather than what is intended. See
-`docs/decisions/ADR-0001`.
+`radius/`, `tests/` and `handoffs/` exist because the phases that fill them ran.
+`experiments/`, `validation/` and `results/` were **never created**: a directory arrives with the
+phase that fills it, and no such phase was reached. The tree describes what exists rather than what
+was intended. See `docs/decisions/ADR-0001`.
 
 ## What is published here, and what is not
 
@@ -171,23 +190,24 @@ numerical integration → analytical verification → atmosphere → aerodynamic
 abstraction → trajectory simulation → navigation → guidance/control → uncertainty propagation →
 possible AURA interface.
 
-The project is at step 2. The research specification is complete for Phases 2–6, frames and math
-utilities are implemented and verified, and the analytical verification anchors for the equations
-of motion are frozen ahead of the code they will test. No step is skipped, and no subsystem is
-implemented before its mathematical formulation, assumptions and verification strategy are
-documented.
+**The project stopped at step 2.** The research specification is complete for Phases 2–6, frames and
+math utilities are implemented and verified, one dynamics function exists, and the analytical
+verification anchors for the equations of motion are frozen — four of the five never consumed by an
+implementation. No step was skipped, and no subsystem was implemented before its mathematical
+formulation, assumptions and verification strategy were documented. Steps 3 onward were not begun;
+see [`CLOSURE.md`](CLOSURE.md) §6.
 
 ## Reproducing
 
-The verification suite runs today, from the repository root:
+The verification suite still runs, and still passes, from the repository root:
 
 ```bash
 python -m unittest discover -s tests -t tests
 ```
 
-There is no simulation to run yet. Dependencies are kept minimal (Python, `numpy`, `PyYAML` unless
-a further dependency is justified), every stochastic component will take an explicit seed, and
-every result will trace to configuration + seed + commit.
+135 tests, 135 pass, 0 skipped. There is no simulation to run. Dependencies are minimal (Python,
+`numpy`, `PyYAML`), and the provenance and seeding machinery was specified but never exercised,
+because no experiment was ever run.
 
 Reproducibility is claimed precisely, not loosely: **bitwise-identical output on the same platform
 and library versions** given the same commit, configuration and seed; **agreement within a stated
@@ -196,14 +216,14 @@ and a controlled BLAS, which RADIUS does not do. See [`docs/PROVENANCE.md`](docs
 
 ## Citation
 
-There is no result here to cite yet. Until there is, refer to the repository itself:
+There is no result here to cite, and there will not be. Refer to the repository itself:
 
 > RADIUS — Rocket Dynamics & Integrated Uncertainty Simulation.
 > `https://github.com/invalid093/RADIUS`, commit `<hash>`, accessed `<date>`.
 
-Cite a specific commit, not the branch: the repository is under active development and `main` will
-not say the same thing next week. A `CITATION.cff` will be added when there is a result worth
-citing and the author has chosen how to be named.
+Cite a specific commit. `main` is now terminal, so the distinction matters less than it did, but the
+closure commit is the one that describes the project as a whole. No `CITATION.cff` is added: there is
+no result worth citing.
 
 ## Licence
 

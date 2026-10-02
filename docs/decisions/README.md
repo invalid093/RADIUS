@@ -23,3 +23,4 @@ a new ADR that says so, and the original stays.
 | [ADR-0009](ADR-0009-variable-mass-rotational-equation.md) | Variable-mass rotational equation: the inertia-rate term is removed | Accepted | 2026-09-09 |
 | [ADR-0010](ADR-0010-dynamics-specification-conventions.md) | Dynamics specification conventions: verification-ID ownership, symmetry axis, axisymmetric inertia notation, status vocabulary | Accepted | 2026-09-11 |
 | [ADR-0011](ADR-0011-project-maturity-labelling.md) | Project maturity labelling: the project label is scoped, and is not the component status | Accepted | 2026-09-12 |
+| [**ADR-0012**](ADR-0012-project-closure.md) | **RADIUS is closed: development stops, and the repository becomes a terminal record** | **Accepted** | **2026-10-01** |

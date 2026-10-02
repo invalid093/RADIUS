@@ -545,3 +545,72 @@ derivative at one state is not a dynamics engine, and the project maturity label
 (ADR-0011).
 
 **NEXT STEP.** Stop and await review before implementing attitude propagation or an integrator.
+
+---
+
+## 2026-10-01 · RL-0017 — RADIUS is closed; the repository becomes a terminal record
+
+**DECISION.** ADR-0012. Development stops. No further implementation phases: attitude propagation,
+the integrator, translational dynamics, the assembled state derivative, atmosphere, aerodynamics,
+variable mass and uncertainty propagation are not begun and are not planned. `CLOSURE.md` is created
+at the repository root as the single authoritative statement of final state, carrying the inventory,
+the findings, and the reasons for stopping. The open next-action in `handoffs/current_state.md` is
+closed rather than left pointing at a phase that will not run. The project maturity label is
+**unchanged** — **Research / Architecture**, scoped — because closure is a lifecycle state and the
+§11 label is a claim about what the code does; no row of ADR-0011 §4 is met. No licence is added
+(ADR-0007 stands). The historical record is not rewritten: ADR-0001 … ADR-0011, the
+pre-implementation audit, the quality gate and RL-0001 … RL-0016 stay exactly as written.
+
+**RATIONALE.** Three findings, recorded in `CLOSURE.md` §4.4.
+
+*The last three capability-bearing phases bore no capability.* ADR-0010 repaired a verification-ID
+collision and a symmetry-axis convention mismatch; ADR-0011 repaired status language that went on
+claiming nothing existed after code did; RL-0015 repaired V-EOM-05, an anchor that as specified
+could not detect the error class it existed to catch. Each was necessary. Each was repair of a
+defect this project had created.
+
+*The ratios had inverted.* 6,900 lines of specification and governance and 3,432 lines of tests
+support 657 lines of production code — 10.5 : 1 and 5.2 : 1. `INTERPRETATION`: the apparatus had
+grown faster than the substance it governed and had begun to consume the development budget, and the
+rigour could not be relaxed to compensate, because the rigour was the only thing distinguishing this
+project from a short script against an existing simulator.
+
+*No path to validation existed, and none could.* No independent 6-DOF benchmark trajectory was
+found; no traceable aerodynamic coefficient set exists (`A-AER-03`, Q8); jet damping is omitted with
+unbounded magnitude (`A-VM-03`). Validation requires independent reference data, and the hard scope
+boundary in `CLAUDE.md` excludes the sources it would come from. `INTERPRETATION`: the terminal state
+of the project *as scoped* was always going to be "verified, never validated".
+
+**EVIDENCE.** `FACT`: 135 executed / 135 passed / 0 failed / 0 skipped at closure, unchanged by it.
+Six verification IDs exercised — V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01, V-EOM-05 — out of
+65+ specified across RS-001 … RS-008. Five anchors frozen, one consumed. `CALCULATION`: the line
+ratios above, from the working tree at closure. `INTERPRETATION` for the reading of what those mean.
+
+**TWO LIMITATIONS, RECORDED RATHER THAN RESOLVED.** `LIMITATION`: methodological independence from
+AURA was never achieved. The code independence ADR-0002 actually required held completely — no
+import, no shared schema, no dependency, AURA never modified — but the apparatus is AURA's
+methodology transplanted to a new domain, and that independence was not available to begin with.
+`LIMITATION`: no systematic literature search was run for RADIUS; there is no TV-N1 equivalent here.
+The judgement that this work is not novel is an **interpretation, not an audited finding**, no
+bibliographic claim is made for it, and ADR-0012 must not be cited as closing a novelty gate. The
+project never asserted novelty, so nothing published depends on the question.
+
+**WHAT IS PUBLISHED AS THE RESULT.** Not the status — the findings. Four specification defects caught
+before any code existed, of which F-1 (the −J̇ω term, a factor-of-two spurious spin-up) was
+**unreachable by testing**, because a test-first project derives its oracle from the same
+specification that carries the error and the test passes; five defects found in the project's own
+verification apparatus, including an exact, frozen, passing and worthless anchor; and five
+methodological results, the sharpest being that an anchor sampled at convenient fractions of a period
+is blind to a family of sign and magnitude errors, and that a mutation which is a mathematical
+identity must be recorded as a blind spot rather than counted as a kill.
+
+**IMPACT.** The four unconsumed anchors V-EOM-01 … V-EOM-04 remain frozen, correct and published,
+exercised by nothing here. The §6 open questions become permanent recorded gaps rather than a work
+queue. `radius/` continues to run and to pass; nothing is deleted. Cost, stated plainly: the project
+stops without having simulated anything, and its method is evidenced on six verification IDs — real
+but narrow, and `CLOSURE.md` §7 says so rather than letting the test count imply breadth.
+
+**NEXT STEP.** None. Reopening would be sound only if an independent 6-DOF benchmark trajectory
+becomes available, if the deliverable is deliberately reframed as the verification methodology with
+rigid-body dynamics as the case study, or if a traceable aerodynamic coefficient set closes Q8.
+Continuing under the existing scope would reproduce the rationale above.

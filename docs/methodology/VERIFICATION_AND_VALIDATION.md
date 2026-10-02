@@ -1,8 +1,10 @@
 # RADIUS — Verification and Validation Strategy
 
-**Status:** Strategy, written before implementation. The frame and attitude conventions are now
-**verified** against hand-derived anchors (section 2). Nothing is **validated**, and no dynamics,
-integrator, atmosphere or aerodynamic code exists to verify.
+**Status:** Strategy, written before implementation, and **terminal** — the project is closed
+(ADR-0012, 2026-10-01). The frame and attitude conventions and the rotational derivative are
+**verified** against hand-derived anchors (section 2). Nothing is **validated**, and no path to
+validation ever existed: see `CLOSURE.md` §5. Most of the strategy below was never executed, and is
+retained as the strategy it was rather than rewritten to match what happened.
 **Sources:** SRC-011 (Oberkampf & Roy), SRC-012 (AIAA G-077-1998), SRC-013 (NASA-STD-7009)
 
 ---
@@ -40,10 +42,10 @@ this table said "verification tests written: none", which stopped being true at 
 |---|---|
 | Implemented | `radius/frames.py` (frame, Euler, quaternion→DCM and wind-frame transformations), `radius/math/quaternion.py` (Hamilton product), and `radius/dynamics/rotational.py` (the rigid-body rotational **derivative**, evaluated at one state) — and nothing else. No integrator, attitude propagation, translational dynamics, atmosphere, aerodynamic or trajectory code exists |
 | Verified | **the frame and attitude conventions** (V-FRM-05, V-FRM-08, V-FRM-09, V-FRM-10, V-ATT-01) **and the rotational derivative** (V-EOM-05, via `tests/test_dynamics_rotational.py`), against hand-derived anchors. Nothing else |
-| Validated | **nothing** |
+| Validated | **nothing**, permanently — no independent 6-DOF benchmark trajectory was ever found (`CLOSURE.md` §5) |
 | Verification tests written | **135**: 135 passing, 0 failing, **0 skipped** — against 65+ test IDs *specified* across RS-001…RS-008 (not like-for-like: one specified ID is usually several test methods) |
 | Frozen analytical anchors, awaiting an implementation to consume them | **V-EOM-01**, **V-EOM-02**, **V-EOM-03** (translational), **V-EOM-04** and **V-EOM-05** (rotational) — established as exact oracles; no translational or rotational dynamics code exists |
-| Independent reference data held | **none** |
+| Independent reference data held | **none**, and none was ever obtained |
 
 ### Translational EOM analytical anchors
 

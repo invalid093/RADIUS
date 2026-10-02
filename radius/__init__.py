@@ -3,7 +3,9 @@
 A physics-based nonlinear 6-DOF aerospace vehicle dynamics, simulation and
 uncertainty-analysis framework.
 
-**Status: research / architecture phase.** This package contains the frame and quaternion
+**Status: the project is CLOSED (ADR-0012, 2026-10-01); maturity at closure was research /
+architecture.** This package still runs and still passes its tests, and is not under
+development. See ``CLOSURE.md``. This package contains the frame and quaternion
 mathematics needed to make the independently hand-derived Phase 2A anchors in
 ``tests/test_frames.py`` executable, plus exactly one dynamics function: the rigid-body
 rotational derivative in ``radius.dynamics.rotational``, verified against the V-EOM-05
