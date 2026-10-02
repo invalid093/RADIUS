@@ -218,7 +218,7 @@ and a controlled BLAS, which RADIUS does not do. See [`docs/PROVENANCE.md`](docs
 
 There is no result here to cite, and there will not be. Refer to the repository itself:
 
-> RADIUS — Rocket Dynamics & Integrated Uncertainty Simulation.
+> RADIUS — Robust Aerospace Dynamics & Uncertainty Inference System.
 > `https://github.com/invalid093/RADIUS`, commit `<hash>`, accessed `<date>`.
 
 Cite a specific commit. `main` is now terminal, so the distinction matters less than it did, but the
